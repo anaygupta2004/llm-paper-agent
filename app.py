@@ -28,6 +28,24 @@ ARXIV_CATEGORIES = ["cs.LG"]  # Default to cs.LG (Machine Learning)
 paper_data = []
 
 
+def get_project_root():
+    # Get the directory of the current script
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Navigate up until we find the .git folder or reach the root
+    while current_dir != "/":
+        if ".git" in os.listdir(current_dir):
+            return current_dir
+        current_dir = os.path.dirname(current_dir)
+
+    # If we didn't find a .git folder, return the current script's directory
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+PROJECT_ROOT = get_project_root()
+VERDICTS_FILE = os.path.join(PROJECT_ROOT, "verdicts.jsonl")
+
+
 def fetch_recent_papers():
     search = arxiv.Search(
         query=" OR ".join(f"cat:{cat}" for cat in ARXIV_CATEGORIES),
@@ -72,11 +90,24 @@ def evaluate_relevance(paper, preferences):
             Is this paper strongly relevant? If so reply with RELEVANT, if not reply NOT_ENOUGH_RELATED.
             """,
             oai_key=OPENAI_KEY,
-            logging_path="verdicts.jsonl",
+            logging_path=VERDICTS_FILE,
             max_num_tokens=128,
         )
 
         result = llm([{**paper, "preferences": preferences}])[0]
+
+        # Append the verdict to the file
+        with open(VERDICTS_FILE, "a") as f:
+            json.dump(
+                {
+                    "title": paper["title"],
+                    "response": result["response"],
+                    "timestamp": datetime.now().isoformat(),
+                },
+                f,
+            )
+            f.write("\n")
+
         return "RELEVANT" in result["response"]
     except Exception as e:
         print(f"Error in evaluate_relevance: {str(e)}")
@@ -214,8 +245,8 @@ def update_settings():
 
 @app.route("/get_verdicts")
 def get_verdicts():
-    if os.path.exists("verdicts.jsonl"):
-        with open("verdicts.jsonl", "r") as f:
+    if os.path.exists(VERDICTS_FILE):
+        with open(VERDICTS_FILE, "r") as f:
             verdicts = [json.loads(line) for line in f]
         return jsonify(verdicts)
     else:

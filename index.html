@@ -94,6 +94,27 @@
             background-color: #e2e8f0;
             color: #4a5568;
         }
+        #verdictsModal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        #verdictsModalContent {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -131,36 +152,44 @@
     </div>
 
     <!-- Settings Modal -->
-<!-- Settings Modal -->
-<div id="settingsModal" class="modal">
-    <div class="modal-content rounded-lg">
-        <span class="close">&times;</span>
-        <h2 class="text-2xl font-bold mb-4">Settings</h2>
-        <form id="settingsForm">
-            <div class="mb-4">
-                <label for="openaiKey" class="block text-sm font-medium text-gray-700 mb-2">OpenAI API Key:</label>
-                <input type="text" id="openaiKey" name="openaiKey" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter your OpenAI API key">
-            </div>
-            <div class="mb-4">
-                <label for="maxResults" class="block text-sm font-medium text-gray-700 mb-2">Max Results:</label>
-                <input type="number" id="maxResults" name="maxResults" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter max results (e.g., 100)" min="1" max="1000">
-            </div>
-            <div class="mb-4">
-                <label for="papersPerPage" class="block text-sm font-medium text-gray-700 mb-2">Papers Per Page:</label>
-                <input type="number" id="papersPerPage" name="papersPerPage" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter papers per page (e.g., 10)" min="1" max="100">
-            </div>
-            <div class="mb-4">
-                <label for="dateRange" class="block text-sm font-medium text-gray-700 mb-2">Date Range (days):</label>
-                <input type="number" id="dateRange" name="dateRange" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter date range in days (e.g., 7)" min="1" max="365">
-            </div>
-            <div class="mb-4">
-                <label for="arxivCategories" class="block text-sm font-medium text-gray-700 mb-2">arXiv Categories:</label>
-                <input type="text" id="arxivCategories" name="arxivCategories" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter arXiv categories (comma-separated, e.g., cs.LG,cs.AI)">
-            </div>
-            <button type="submit" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">Save Settings</button>
-        </form>
+    <div id="settingsModal" class="modal">
+        <div class="modal-content rounded-lg">
+            <span class="close">&times;</span>
+            <h2 class="text-2xl font-bold mb-4">Settings</h2>
+            <form id="settingsForm">
+                <div class="mb-4">
+                    <label for="openaiKey" class="block text-sm font-medium text-gray-700 mb-2">OpenAI API Key:</label>
+                    <input type="text" id="openaiKey" name="openaiKey" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter your OpenAI API key">
+                </div>
+                <div class="mb-4">
+                    <label for="maxResults" class="block text-sm font-medium text-gray-700 mb-2">Max Results:</label>
+                    <input type="number" id="maxResults" name="maxResults" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter max results (e.g., 100)" min="1" max="1000">
+                </div>
+                <div class="mb-4">
+                    <label for="papersPerPage" class="block text-sm font-medium text-gray-700 mb-2">Papers Per Page:</label>
+                    <input type="number" id="papersPerPage" name="papersPerPage" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter papers per page (e.g., 10)" min="1" max="100">
+                </div>
+                <div class="mb-4">
+                    <label for="dateRange" class="block text-sm font-medium text-gray-700 mb-2">Date Range (days):</label>
+                    <input type="number" id="dateRange" name="dateRange" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter date range in days (e.g., 7)" min="1" max="365">
+                </div>
+                <div class="mb-4">
+                    <label for="arxivCategories" class="block text-sm font-medium text-gray-700 mb-2">arXiv Categories:</label>
+                    <input type="text" id="arxivCategories" name="arxivCategories" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter arXiv categories (comma-separated, e.g., cs.LG,cs.AI)">
+                </div>
+                <button type="submit" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">Save Settings</button>
+            </form>
+        </div>
     </div>
-</div>
+
+    <!-- Verdicts Modal -->
+    <div id="verdictsModal" class="modal">
+        <div id="verdictsModalContent" class="rounded-lg">
+            <span class="close">&times;</span>
+            <h2 class="text-2xl font-bold mb-4">Verdicts</h2>
+            <div id="verdictsContainer"></div>
+        </div>
+    </div>
 
 <script>
     let currentPage = 1;
@@ -194,6 +223,7 @@
         $("#view-verdicts").click(function() {
             $.get("/get_verdicts", function(data) {
                 displayVerdicts(data);
+                $("#verdictsModal").show();
             });
         });
 
@@ -219,6 +249,18 @@
         $("#settingsForm").submit(function(e) {
             e.preventDefault();
             updateSettings();
+        });
+
+        // Close button for verdicts modal
+        $("#verdictsModal .close").click(function() {
+            $("#verdictsModal").hide();
+        });
+
+        // Close modal when clicking outside
+        $(window).click(function(event) {
+            if (event.target == $("#verdictsModal")[0]) {
+                $("#verdictsModal").hide();
+            }
         });
     });
 
@@ -270,53 +312,84 @@
     }
 
     function displayPapers(papers) {
-        const container = $("#papers-container");
-        container.empty();
+    const container = $("#papers-container");
+    container.empty();
 
-        papers.forEach(function(paper) {
-            const card = $("<div>").addClass("paper-card bg-white p-6 rounded-lg shadow-md");
-            card.append($("<h2>").addClass("text-xl font-semibold mb-2").text(paper.title));
-            card.append($("<p>").addClass("text-sm text-gray-600 mb-2").text(`Authors: ${paper.authors}`));
-            card.append($("<p>").addClass("text-sm text-gray-600 mb-2").text(`Published: ${paper.published_date}`));
-            
-            const categoryLabel = $("<span>").addClass("category-label mb-2").text(paper.primary_category);
-            card.append(categoryLabel);
+    papers.forEach(function(paper) {
+        const card = $("<div>").addClass("paper-card bg-white p-6 rounded-lg shadow-md cursor-pointer");
+        card.append($("<h2>").addClass("text-xl font-semibold mb-2").text(paper.title));
+        card.append($("<p>").addClass("text-sm text-gray-600 mb-2").text(`Authors: ${paper.authors}`));
+        card.append($("<p>").addClass("text-sm text-gray-600 mb-2").text(`Published: ${paper.published_date}`));
+        
+        const categoryLabel = $("<span>").addClass("category-label mb-2").text(paper.primary_category);
+        card.append(categoryLabel);
 
-            const abstractToggle = $("<button>").addClass("text-blue-500 hover:underline mb-2").text("Show Abstract");
-            const abstractContent = $("<p>").addClass("text-sm mb-4 hidden").text(paper.abstract);
-            
-            abstractToggle.click(function() {
-                abstractContent.toggleClass("hidden");
-                abstractToggle.text(abstractContent.hasClass("hidden") ? "Show Abstract" : "Hide Abstract");
-            });
-
-            card.append(abstractToggle);
-            card.append(abstractContent);
-            
-            const links = $("<div>").addClass("flex space-x-4 mb-4");
-            links.append($("<a>").attr("href", paper.pdf_url).attr("target", "_blank").addClass("text-blue-500 hover:underline").text("PDF"));
-            links.append($("<a>").attr("href", paper.abstract_url).attr("target", "_blank").addClass("text-blue-500 hover:underline").text("Abstract"));
-            card.append(links);
-
-            const voteContainer = $("<div>").addClass("flex items-center space-x-2");
-            const upvoteBtn = $("<button>").addClass("text-green-500 hover:text-green-600").html('<i class="fas fa-thumbs-up"></i>');
-            const downvoteBtn = $("<button>").addClass("text-red-500 hover:text-red-600").html('<i class="fas fa-thumbs-down"></i>');
-            const voteCount = $("<span>").addClass("text-gray-600").text(paper.votes);
-
-            upvoteBtn.click(function() {
-                vote(paper.arxiv_id, "up", voteCount);
-            });
-
-            downvoteBtn.click(function() {
-                vote(paper.arxiv_id, "down", voteCount);
-            });
-
-            voteContainer.append(upvoteBtn, downvoteBtn, voteCount);
-            card.append(voteContainer);
-
-            container.append(card);
+        const abstractBox = $("<div>").addClass("abstract-box border border-gray-300 rounded p-4 mb-4");
+        const abstractToggle = $("<div>").addClass("flex justify-between items-center cursor-pointer");
+        abstractToggle.append($("<span>").addClass("text-blue-500").text("Abstract"));
+        const toggleIcon = $("<i>").addClass("fas fa-chevron-down text-blue-500");
+        abstractToggle.append(toggleIcon);
+        abstractBox.append(abstractToggle);
+        
+        const abstractContent = $("<p>").addClass("text-sm mt-2 hidden").text(paper.abstract);
+        abstractBox.append(abstractContent);
+        
+        abstractToggle.on("click", function(e) {
+            e.stopPropagation();
+            abstractContent.toggleClass("hidden");
+            toggleIcon.toggleClass("fa-chevron-down fa-chevron-up");
         });
-    }
+
+        card.append(abstractBox);
+        
+        const links = $("<div>").addClass("flex space-x-4 mb-4");
+        links.append($("<a>").attr("href", paper.pdf_url).attr("target", "_blank").addClass("text-blue-500 hover:underline").text("PDF"));
+        links.append($("<a>").attr("href", paper.abstract_url).attr("target", "_blank").addClass("text-blue-500 hover:underline").text("arXiv"));
+        card.append(links);
+
+        const voteContainer = $("<div>").addClass("vote-container flex items-center space-x-2");
+        const upvoteBtn = $("<button>").addClass("text-green-500 hover:text-green-600").html('<i class="fas fa-thumbs-up"></i>');
+        const downvoteBtn = $("<button>").addClass("text-red-500 hover:text-red-600").html('<i class="fas fa-thumbs-down"></i>');
+        const voteCount = $("<span>").addClass("text-gray-600").text(paper.votes);
+
+        upvoteBtn.click(function(e) {
+            e.stopPropagation();
+            vote(paper.arxiv_id, "up", voteCount);
+        });
+
+        downvoteBtn.click(function(e) {
+            e.stopPropagation();
+            vote(paper.arxiv_id, "down", voteCount);
+        });
+
+        voteContainer.append(upvoteBtn, downvoteBtn, voteCount);
+        card.append(voteContainer);
+
+        let clickTimer = null;
+        let clickCount = 0;
+
+        card.on("click", function(e) {
+            if ($(e.target).is('a') || $(e.target).closest('a').length || 
+                $(e.target).closest('.vote-container').length) {
+                return; // Don't interfere with links or vote buttons
+            }
+            
+            clickCount++;
+            if (clickCount === 1) {
+                clickTimer = setTimeout(function() {
+                    vote(paper.arxiv_id, "down", voteCount);
+                    clickCount = 0;
+                }, 300);
+            } else if (clickCount === 2) {
+                clearTimeout(clickTimer);
+                vote(paper.arxiv_id, "up", voteCount);
+                clickCount = 0;
+            }
+        });
+
+        container.append(card);
+    });
+}
 
     function vote(arxivId, voteType, voteCountElement) {
         $.ajax({
@@ -334,6 +407,8 @@
             }
         });
     }
+
+
 
     function getPage(page) {
         $.get(`/get_page?page=${page}`, function(data) {
@@ -382,31 +457,20 @@
     function displayVerdicts(verdicts) {
         const container = $("#verdictsContainer");
         container.empty();
-        container.show();
 
         if (verdicts.length === 0) {
             container.append($("<p>").text("No verdicts available."));
             return;
         }
 
-        const table = $("<table>").addClass("w-full border-collapse border border-gray-300 mt-4");
-        const thead = $("<thead>").addClass("bg-gray-100");
-        const headerRow = $("<tr>");
-        headerRow.append($("<th>").addClass("border border-gray-300 px-4 py-2").text("Title"));
-        headerRow.append($("<th>").addClass("border border-gray-300 px-4 py-2").text("Verdict"));
-        thead.append(headerRow);
-        table.append(thead);
-
-        const tbody = $("<tbody>");
-        verdicts.forEach(function(verdict) {
-            const row = $("<tr>");
-            row.append($("<td>").addClass("border border-gray-300 px-4 py-2").text(verdict.title));
-            row.append($("<td>").addClass("border border-gray-300 px-4 py-2").text(verdict.response));
-            tbody.append(row);
+        verdicts.forEach(function(verdict, index) {
+            const verdictCard = $("<div>").addClass("bg-white p-4 rounded-lg shadow-md mb-4");
+            verdictCard.append($("<h3>").addClass("text-lg font-semibold mb-2").text(`Verdict ${index + 1}`));
+            verdictCard.append($("<p>").addClass("mb-1").html(`<strong>Title:</strong> ${verdict.title}`));
+            verdictCard.append($("<p>").addClass("mb-1").html(`<strong>Verdict:</strong> ${verdict.response}`));
+            verdictCard.append($("<p>").addClass("text-sm text-gray-600").text(`Timestamp: ${new Date(verdict.timestamp).toLocaleString()}`));
+            container.append(verdictCard);
         });
-        table.append(tbody);
-
-        container.append(table);
     }
 </script>
 </body>
