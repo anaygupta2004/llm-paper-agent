@@ -17,33 +17,39 @@ import time
 app = Flask(__name__, static_url_path="")
 
 # Configuration
-MAX_RESULTS = None
+MAX_RESULTS = 100
 OPENAI_KEY = None
 MODEL_NAME = "gpt-4-turbo"
 PAPERS_PER_PAGE = 10
+DATE_RANGE = 7  # Default to 7 days
+ARXIV_CATEGORIES = ["cs.LG"]  # Default to cs.LG (Machine Learning)
 
 # Global variables
 paper_data = []
 
 
-def fetch_recent_papers(query="cat:cs.LG"):
+def fetch_recent_papers():
     search = arxiv.Search(
-        query=query, max_results=MAX_RESULTS, sort_by=arxiv.SortCriterion.SubmittedDate
+        query=" OR ".join(f"cat:{cat}" for cat in ARXIV_CATEGORIES),
+        max_results=MAX_RESULTS,
+        sort_by=arxiv.SortCriterion.SubmittedDate,
     )
     client = arxiv.Client()
     papers = []
-    last_week = datetime.now(timezone.utc) - timedelta(days=7)
+    date_limit = datetime.now(timezone.utc) - timedelta(days=DATE_RANGE)
 
     for result in client.results(search):
-        if result.published >= last_week:
+        if result.published >= date_limit:
             papers.append(
                 {
                     "title": result.title,
                     "authors": ", ".join(str(author) for author in result.authors),
                     "abstract": result.summary,
-                    "arxiv_id": result.entry_id,
+                    "arxiv_id": result.entry_id.split("/")[-1],
                     "pdf_url": result.pdf_url,
+                    "abstract_url": result.entry_id,
                     "primary_category": result.primary_category,
+                    "published_date": result.published.strftime("%Y-%m-%d"),
                     "votes": 0,
                 }
             )
@@ -63,7 +69,7 @@ def evaluate_relevance(paper, preferences):
             Now consider the following article:
             Title: {title}
             Abstract: {abstract}
-            Is this paper relevant? Reply with RELEVANT or UNRELATED.
+            Is this paper strongly relevant? If so reply with RELEVANT, if not reply NOT_ENOUGH_RELATED.
             """,
             oai_key=OPENAI_KEY,
             logging_path="verdicts.jsonl",
@@ -88,6 +94,8 @@ def fetch_papers():
     is_annotation_mode = request.form.get("is_annotation_mode") == "true"
 
     def generate():
+        global paper_data
+        paper_data = []  # Reset paper_data
         papers = fetch_recent_papers()
         total_papers = len(papers)
 
@@ -132,12 +140,10 @@ def vote():
 
     for paper in paper_data:
         if paper["arxiv_id"] == arxiv_id:
-            if paper["votes"] == 1 and vote_type == "up":
-                paper["votes"] = 1
-            elif paper["votes"] == -1 and vote_type == "down":
-                paper["votes"] = -1
+            if vote_type == "up":
+                paper["votes"] = min(paper["votes"] + 1, 1)
             else:
-                paper["votes"] += 1 if vote_type == "up" else -1
+                paper["votes"] = max(paper["votes"] - 1, -1)
             break
 
     return jsonify({"success": True, "votes": paper["votes"]})
@@ -145,26 +151,36 @@ def vote():
 
 @app.route("/download_json")
 def download_json():
-    if not os.path.exists("paper_data.json"):
-        with open("paper_data.json", "w") as f:
+    if not os.path.exists("data"):
+        os.makedirs("data")
+
+    is_annotation_mode = request.args.get("is_annotation_mode") == "true"
+    filename = f"paper_data_{'annotation' if is_annotation_mode else 'relevance'}.json"
+    filepath = os.path.join("data", filename)
+
+    if not os.path.exists(filepath):
+        with open(filepath, "w") as f:
             json.dump([], f)
 
-    with open("paper_data.json", "r+") as f:
+    with open(filepath, "r+") as f:
         existing_data = json.load(f)
         existing_data.extend(paper_data)
         f.seek(0)
         json.dump(existing_data, f, indent=2)
         f.truncate()
 
-    return send_file("paper_data.json", as_attachment=True)
+    return send_file(filepath, as_attachment=True)
 
 
 @app.route("/update_settings", methods=["POST"])
 def update_settings():
-    global OPENAI_KEY, MAX_RESULTS
+    global OPENAI_KEY, MAX_RESULTS, PAPERS_PER_PAGE, DATE_RANGE, ARXIV_CATEGORIES
 
     new_openai_key = request.form.get("openaiKey")
     new_max_results = request.form.get("maxResults")
+    new_papers_per_page = request.form.get("papersPerPage")
+    new_date_range = request.form.get("dateRange")
+    new_arxiv_categories = request.form.get("arxivCategories")
 
     if new_openai_key:
         OPENAI_KEY = new_openai_key
@@ -176,7 +192,34 @@ def update_settings():
         except ValueError:
             return jsonify({"success": False, "message": "Invalid MAX_RESULTS value"})
 
+    if new_papers_per_page:
+        try:
+            PAPERS_PER_PAGE = int(new_papers_per_page)
+        except ValueError:
+            return jsonify(
+                {"success": False, "message": "Invalid PAPERS_PER_PAGE value"}
+            )
+
+    if new_date_range:
+        try:
+            DATE_RANGE = int(new_date_range)
+        except ValueError:
+            return jsonify({"success": False, "message": "Invalid DATE_RANGE value"})
+
+    if new_arxiv_categories:
+        ARXIV_CATEGORIES = [cat.strip() for cat in new_arxiv_categories.split(",")]
+
     return jsonify({"success": True})
+
+
+@app.route("/get_verdicts")
+def get_verdicts():
+    if os.path.exists("verdicts.jsonl"):
+        with open("verdicts.jsonl", "r") as f:
+            verdicts = [json.loads(line) for line in f]
+        return jsonify(verdicts)
+    else:
+        return jsonify([])
 
 
 if __name__ == "__main__":

@@ -85,6 +85,15 @@
             text-decoration: none;
             cursor: pointer;
         }
+        .category-label {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background-color: #e2e8f0;
+            color: #4a5568;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -109,6 +118,7 @@
         <div id="progressBar" class="w-full h-4 bg-gray-200 rounded-full mb-2" style="display: none;">
             <div class="h-full bg-blue-500 rounded-full" style="width: 0%"></div>
         </div>
+        <div id="verdictsContainer" class="mt-4" style="display: none;"></div>
         <p id="progressText" class="text-sm text-gray-600 mb-4" style="display: none;"></p>
         <div id="papers-container" class="space-y-6"></div>
         <div class="flex justify-between items-center mt-8">
@@ -117,176 +127,287 @@
             <button id="next-page" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50">Next</button>
         </div>
         <button id="download-json" class="mt-8 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50">Download JSON</button>
+        <button id="view-verdicts" class="mt-4 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50">View Verdicts</button>
     </div>
 
     <!-- Settings Modal -->
-    <div id="settingsModal" class="modal">
-        <div class="modal-content rounded-lg">
-            <span class="close">&times;</span>
-            <h2 class="text-2xl font-bold mb-4">Settings</h2>
-            <form id="settingsForm">
-                <div class="mb-4">
-                    <label for="openaiKey" class="block text-sm font-medium text-gray-700 mb-2">OpenAI API Key:</label>
-                    <input type="text" id="openaiKey" name="openaiKey" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter your OpenAI API key">
-                </div>
-                <div class="mb-4">
-                    <label for="maxResults" class="block text-sm font-medium text-gray-700 mb-2">Max Results:</label>
-                    <input type="number" id="maxResults" name="maxResults" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter max results (e.g., 100)" min="1" max="1000">
-                </div>
-                <button type="submit" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">Save Settings</button>
-            </form>
-        </div>
+<!-- Settings Modal -->
+<div id="settingsModal" class="modal">
+    <div class="modal-content rounded-lg">
+        <span class="close">&times;</span>
+        <h2 class="text-2xl font-bold mb-4">Settings</h2>
+        <form id="settingsForm">
+            <div class="mb-4">
+                <label for="openaiKey" class="block text-sm font-medium text-gray-700 mb-2">OpenAI API Key:</label>
+                <input type="text" id="openaiKey" name="openaiKey" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter your OpenAI API key">
+            </div>
+            <div class="mb-4">
+                <label for="maxResults" class="block text-sm font-medium text-gray-700 mb-2">Max Results:</label>
+                <input type="number" id="maxResults" name="maxResults" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter max results (e.g., 100)" min="1" max="1000">
+            </div>
+            <div class="mb-4">
+                <label for="papersPerPage" class="block text-sm font-medium text-gray-700 mb-2">Papers Per Page:</label>
+                <input type="number" id="papersPerPage" name="papersPerPage" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter papers per page (e.g., 10)" min="1" max="100">
+            </div>
+            <div class="mb-4">
+                <label for="dateRange" class="block text-sm font-medium text-gray-700 mb-2">Date Range (days):</label>
+                <input type="number" id="dateRange" name="dateRange" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter date range in days (e.g., 7)" min="1" max="365">
+            </div>
+            <div class="mb-4">
+                <label for="arxivCategories" class="block text-sm font-medium text-gray-700 mb-2">arXiv Categories:</label>
+                <input type="text" id="arxivCategories" name="arxivCategories" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter arXiv categories (comma-separated, e.g., cs.LG,cs.AI)">
+            </div>
+            <button type="submit" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">Save Settings</button>
+        </form>
     </div>
+</div>
 
-    <script>
-        let isAnnotationMode = false;
-        let currentPage = 1;
-        let totalPapers = 0;
-        const PAPERS_PER_PAGE = 10;
+<script>
+    let currentPage = 1;
+    let totalPages = 1;
 
-        $(document).ready(function() {
-            $('#mode-toggle').change(function() {
-                isAnnotationMode = $(this).is(':checked');
-            });
+    $(document).ready(function() {
+        $("#preferences-form").submit(function(e) {
+            e.preventDefault();
+            fetchPapers();
+        });
 
-            $('#preferences-form').submit(function(e) {
-                e.preventDefault();
-                fetchPapers();
-            });
-
-            $('#papers-container').on('click', '.upvote, .downvote', function() {
-                const paperCard = $(this).closest('.paper-card');
-                const arxivId = paperCard.data('arxiv-id');
-                const voteType = $(this).hasClass('upvote') ? 'up' : 'down';
-                $.post('/vote', {arxiv_id: arxivId, vote_type: voteType}, function(data) {
-                    if (data.success) {
-                        paperCard.find('.vote-count').text(data.votes);
-                    }
-                });
-            });
-
-            $('#prev-page').click(function() {
-                if (currentPage > 1) {
-                    currentPage--;
-                    fetchPage();
-                }
-            });
-
-            $('#next-page').click(function() {
-                if (currentPage < Math.ceil(totalPapers / PAPERS_PER_PAGE)) {
-                    currentPage++;
-                    fetchPage();
-                }
-            });
-
-            $('#download-json').click(function() {
-                window.location.href = '/download_json';
-            });
-
-            // Settings modal
-            const modal = document.getElementById("settingsModal");
-            const btn = document.getElementById("settingsBtn");
-            const span = document.getElementsByClassName("close")[0];
-
-            btn.onclick = function() {
-                modal.style.display = "block";
+        $("#prev-page").click(function() {
+            if (currentPage > 1) {
+                currentPage--;
+                getPage(currentPage);
             }
+        });
 
-            span.onclick = function() {
-                modal.style.display = "none";
+        $("#next-page").click(function() {
+            if (currentPage < totalPages) {
+                currentPage++;
+                getPage(currentPage);
             }
+        });
 
-            window.onclick = function(event) {
-                if (event.target == modal) {
-                    modal.style.display = "none";
-                }
-            }
+        $("#download-json").click(function() {
+            const isAnnotationMode = $("#mode-toggle").is(":checked");
+            window.location.href = `/download_json?is_annotation_mode=${isAnnotationMode}`;
+        });
 
-            $('#settingsForm').submit(function(e) {
-                e.preventDefault();
-                const openaiKey = $('#openaiKey').val();
-                const maxResults = $('#maxResults').val();
-                
-                $.post('/update_settings', {openaiKey: openaiKey, maxResults: maxResults}, function(response) {
-                    if (response.success) {
-                        alert('Settings updated successfully!');
-                        modal.style.display = "none";
-                    } else {
-                        alert('Failed to update settings. Please try again.');
-                    }
-                });
+        $("#view-verdicts").click(function() {
+            $.get("/get_verdicts", function(data) {
+                displayVerdicts(data);
             });
         });
 
-        function fetchPapers() {
-            const preferences = $('#preferences').val();
-            const formData = new FormData();
-            formData.append('preferences', preferences);
-            formData.append('is_annotation_mode', isAnnotationMode);
+        // Settings modal
+        const modal = document.getElementById("settingsModal");
+        const btn = document.getElementById("settingsBtn");
+        const span = document.getElementsByClassName("close")[0];
 
-            $('#progressBar').show().find('div').css('width', '0%');
-            $('#progressText').show().text('Starting...');
-            $('#papers-container').empty();
+        btn.onclick = function() {
+            modal.style.display = "block";
+        }
 
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/fetch_papers', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            xhr.onprogress = function(event) {
-                const lines = event.target.responseText.split('\n');
-                const lastLine = lines[lines.length - 2]; // Last complete line
-                if (lastLine) {
-                    const data = JSON.parse(lastLine);
-                    if (data.progress) {
-                        $('#progressBar').find('div').css('width', data.progress + '%');
-                        $('#progressText').text(`Processing ${data.current} of ${data.total} papers`);
-                    }
-                    if (data.done) {
-                        $('#progressBar').hide();
-                        $('#progressText').hide();
-                        totalPapers = data.total;
-                        currentPage = 1;
-                        renderPapers(data.papers);
+        span.onclick = function() {
+            modal.style.display = "none";
+        }
+
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+        $("#settingsForm").submit(function(e) {
+            e.preventDefault();
+            updateSettings();
+        });
+    });
+
+    function fetchPapers() {
+        const preferences = $("#preferences").val();
+        const isAnnotationMode = $("#mode-toggle").is(":checked");
+
+        $("#progressBar").show();
+        $("#progressText").show();
+
+        $.ajax({
+            url: "/fetch_papers",
+            method: "POST",
+            data: {
+                preferences: preferences,
+                is_annotation_mode: isAnnotationMode
+            },
+            xhrFields: {
+                onprogress: function(e) {
+                    const response = e.currentTarget.response;
+                    const lines = response.split("\n");
+                    const lastLine = lines[lines.length - 2]; // Get the last non-empty line
+                    if (lastLine) {
+                        const data = JSON.parse(lastLine);
+                        if (data.done) {
+                            displayPapers(data.papers);
+                            updatePagination(data.total);
+                        } else {
+                            updateProgress(data.progress, data.current, data.total);
+                        }
                     }
                 }
-            };
-            xhr.onerror = function() {
-                console.error('An error occurred during the transaction');
-                $('#progressText').text('An error occurred. Please try again.');
-            };
-            xhr.send(new URLSearchParams(formData));
-        }
+            },
+            success: function(data) {
+                $("#progressBar").hide();
+                $("#progressText").hide();
+            },
+            error: function(xhr, status, error) {
+                console.error("Error fetching papers:", error);
+                $("#progressBar").hide();
+                $("#progressText").hide();
+            }
+        });
+    }
 
-        function renderPapers(papers) {
-            let papersHtml = papers.map(paper => `
-                <div class="paper-card bg-white rounded-lg shadow-md p-6 mb-4" data-arxiv-id="${paper.arxiv_id}">
-                    <h2 class="text-2xl font-semibold mb-2 text-gray-800">${paper.title}</h2>
-                    <p class="text-sm text-gray-600 mb-2"><strong>Authors:</strong> ${paper.authors}</p>
-                    <p class="text-gray-700 mb-4">${paper.abstract}</p>
-                    <div class="flex justify-between items-center">
-                        <a href="${paper.pdf_url}" target="_blank" class="text-blue-500 hover:text-blue-600">PDF Link</a>
-                        <div class="flex items-center space-x-4">
-                            <button class="upvote text-gray-500 hover:text-green-500"><i class="fas fa-thumbs-up"></i></button>
-                            <button class="downvote text-gray-500 hover:text-red-500"><i class="fas fa-thumbs-down"></i></button>
-                            <span class="vote-count text-gray-700">${paper.votes}</span>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-            $('#papers-container').html(papersHtml);
-            updatePageInfo();
-        }
+    function updateProgress(progress, current, total) {
+        $("#progressBar > div").css("width", progress + "%");
+        $("#progressText").text(`Processing ${current} of ${total} papers`);
+    }
 
-        function updatePageInfo() {
-            $('#page-info').text(`Page ${currentPage} of ${Math.ceil(totalPapers / PAPERS_PER_PAGE)}`);
-            $('#prev-page').prop('disabled', currentPage === 1);
-            $('#next-page').prop('disabled', currentPage === Math.ceil(totalPapers / PAPERS_PER_PAGE));
-        }
+    function displayPapers(papers) {
+        const container = $("#papers-container");
+        container.empty();
 
-        function fetchPage() {
-            $.get(`/get_page?page=${currentPage}`, function(data) {
-                renderPapers(data.papers);
+        papers.forEach(function(paper) {
+            const card = $("<div>").addClass("paper-card bg-white p-6 rounded-lg shadow-md");
+            card.append($("<h2>").addClass("text-xl font-semibold mb-2").text(paper.title));
+            card.append($("<p>").addClass("text-sm text-gray-600 mb-2").text(`Authors: ${paper.authors}`));
+            card.append($("<p>").addClass("text-sm text-gray-600 mb-2").text(`Published: ${paper.published_date}`));
+            
+            const categoryLabel = $("<span>").addClass("category-label mb-2").text(paper.primary_category);
+            card.append(categoryLabel);
+
+            const abstractToggle = $("<button>").addClass("text-blue-500 hover:underline mb-2").text("Show Abstract");
+            const abstractContent = $("<p>").addClass("text-sm mb-4 hidden").text(paper.abstract);
+            
+            abstractToggle.click(function() {
+                abstractContent.toggleClass("hidden");
+                abstractToggle.text(abstractContent.hasClass("hidden") ? "Show Abstract" : "Hide Abstract");
             });
+
+            card.append(abstractToggle);
+            card.append(abstractContent);
+            
+            const links = $("<div>").addClass("flex space-x-4 mb-4");
+            links.append($("<a>").attr("href", paper.pdf_url).attr("target", "_blank").addClass("text-blue-500 hover:underline").text("PDF"));
+            links.append($("<a>").attr("href", paper.abstract_url).attr("target", "_blank").addClass("text-blue-500 hover:underline").text("Abstract"));
+            card.append(links);
+
+            const voteContainer = $("<div>").addClass("flex items-center space-x-2");
+            const upvoteBtn = $("<button>").addClass("text-green-500 hover:text-green-600").html('<i class="fas fa-thumbs-up"></i>');
+            const downvoteBtn = $("<button>").addClass("text-red-500 hover:text-red-600").html('<i class="fas fa-thumbs-down"></i>');
+            const voteCount = $("<span>").addClass("text-gray-600").text(paper.votes);
+
+            upvoteBtn.click(function() {
+                vote(paper.arxiv_id, "up", voteCount);
+            });
+
+            downvoteBtn.click(function() {
+                vote(paper.arxiv_id, "down", voteCount);
+            });
+
+            voteContainer.append(upvoteBtn, downvoteBtn, voteCount);
+            card.append(voteContainer);
+
+            container.append(card);
+        });
+    }
+
+    function vote(arxivId, voteType, voteCountElement) {
+        $.ajax({
+            url: "/vote",
+            method: "POST",
+            data: {
+                arxiv_id: arxivId,
+                vote_type: voteType
+            },
+            success: function(data) {
+                voteCountElement.text(data.votes);
+            },
+            error: function(xhr, status, error) {
+                console.error("Error voting:", error);
+            }
+        });
+    }
+
+    function getPage(page) {
+        $.get(`/get_page?page=${page}`, function(data) {
+            displayPapers(data.papers);
+            updatePagination(data.total);
+            window.scrollTo(0, 0);
+        });
+    }
+
+    function updatePagination(total) {
+        const papersPerPage = 10; // This should match the PAPERS_PER_PAGE value in your Flask app
+        totalPages = Math.ceil(total / papersPerPage);
+        $("#page-info").text(`Page ${currentPage} of ${totalPages}`);
+        $("#prev-page").prop("disabled", currentPage === 1);
+        $("#next-page").prop("disabled", currentPage === totalPages);
+    }
+
+    function updateSettings() {
+        const settings = {
+            openaiKey: $("#openaiKey").val(),
+            maxResults: $("#maxResults").val(),
+            papersPerPage: $("#papersPerPage").val(),
+            dateRange: $("#dateRange").val(),
+            arxivCategories: $("#arxivCategories").val()
+        };
+
+        $.ajax({
+            url: "/update_settings",
+            method: "POST",
+            data: settings,
+            success: function(response) {
+                if (response.success) {
+                    alert("Settings updated successfully!");
+                    document.getElementById("settingsModal").style.display = "none";
+                } else {
+                    alert("Error updating settings: " + response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error("Error updating settings:", error);
+                alert("Error updating settings. Please try again.");
+            }
+        });
+    }
+
+    function displayVerdicts(verdicts) {
+        const container = $("#verdictsContainer");
+        container.empty();
+        container.show();
+
+        if (verdicts.length === 0) {
+            container.append($("<p>").text("No verdicts available."));
+            return;
         }
-    </script>
+
+        const table = $("<table>").addClass("w-full border-collapse border border-gray-300 mt-4");
+        const thead = $("<thead>").addClass("bg-gray-100");
+        const headerRow = $("<tr>");
+        headerRow.append($("<th>").addClass("border border-gray-300 px-4 py-2").text("Title"));
+        headerRow.append($("<th>").addClass("border border-gray-300 px-4 py-2").text("Verdict"));
+        thead.append(headerRow);
+        table.append(thead);
+
+        const tbody = $("<tbody>");
+        verdicts.forEach(function(verdict) {
+            const row = $("<tr>");
+            row.append($("<td>").addClass("border border-gray-300 px-4 py-2").text(verdict.title));
+            row.append($("<td>").addClass("border border-gray-300 px-4 py-2").text(verdict.response));
+            tbody.append(row);
+        });
+        table.append(tbody);
+
+        container.append(table);
+    }
+</script>
 </body>
 </html>
