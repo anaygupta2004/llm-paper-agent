@@ -54,37 +54,6 @@
         input:checked + .slider:before {
             transform: translateX(26px);
         }
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.4);
-        }
-        .modal-content {
-            background-color: #fefefe;
-            margin: 15% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-            max-width: 500px;
-        }
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-        }
-        .close:hover,
-        .close:focus {
-            color: black;
-            text-decoration: none;
-            cursor: pointer;
-        }
         .category-label {
             display: inline-block;
             padding: 2px 8px;
@@ -93,27 +62,6 @@
             font-weight: 600;
             background-color: #e2e8f0;
             color: #4a5568;
-        }
-        #verdictsModal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.4);
-        }
-        #verdictsModalContent {
-            background-color: #fefefe;
-            margin: 15% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-            max-width: 800px;
-            max-height: 80vh;
-            overflow-y: auto;
         }
     </style>
 </head>
@@ -139,7 +87,6 @@
         <div id="progressBar" class="w-full h-4 bg-gray-200 rounded-full mb-2" style="display: none;">
             <div class="h-full bg-blue-500 rounded-full" style="width: 0%"></div>
         </div>
-        <div id="verdictsContainer" class="mt-4" style="display: none;"></div>
         <p id="progressText" class="text-sm text-gray-600 mb-4" style="display: none;"></p>
         <div id="papers-container" class="space-y-6"></div>
         <div class="flex justify-between items-center mt-8">
@@ -152,42 +99,51 @@
     </div>
 
     <!-- Settings Modal -->
-    <div id="settingsModal" class="modal">
-        <div class="modal-content rounded-lg">
-            <span class="close">&times;</span>
-            <h2 class="text-2xl font-bold mb-4">Settings</h2>
-            <form id="settingsForm">
-                <div class="mb-4">
-                    <label for="openaiKey" class="block text-sm font-medium text-gray-700 mb-2">OpenAI API Key:</label>
-                    <input type="text" id="openaiKey" name="openaiKey" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter your OpenAI API key">
-                </div>
-                <div class="mb-4">
-                    <label for="maxResults" class="block text-sm font-medium text-gray-700 mb-2">Max Results:</label>
-                    <input type="number" id="maxResults" name="maxResults" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter max results (e.g., 100)" min="1" max="1000">
-                </div>
-                <div class="mb-4">
-                    <label for="papersPerPage" class="block text-sm font-medium text-gray-700 mb-2">Papers Per Page:</label>
-                    <input type="number" id="papersPerPage" name="papersPerPage" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter papers per page (e.g., 10)" min="1" max="100">
-                </div>
-                <div class="mb-4">
-                    <label for="dateRange" class="block text-sm font-medium text-gray-700 mb-2">Date Range (days):</label>
-                    <input type="number" id="dateRange" name="dateRange" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter date range in days (e.g., 7)" min="1" max="365">
-                </div>
-                <div class="mb-4">
-                    <label for="arxivCategories" class="block text-sm font-medium text-gray-700 mb-2">arXiv Categories:</label>
-                    <input type="text" id="arxivCategories" name="arxivCategories" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter arXiv categories (comma-separated, e.g., cs.LG,cs.AI)">
-                </div>
-                <button type="submit" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">Save Settings</button>
-            </form>
+    <div id="settingsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full" style="display: none;">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <h2 class="text-2xl font-bold mb-4">Settings</h2>
+                <form id="settingsForm">
+                    <div class="mb-4">
+                        <label for="openaiKey" class="block text-sm font-medium text-gray-700 mb-2">OpenAI API Key:</label>
+                        <input type="text" id="openaiKey" name="openaiKey" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter your OpenAI API key">
+                    </div>
+                    <div class="mb-4">
+                        <label for="maxResults" class="block text-sm font-medium text-gray-700 mb-2">Max Results:</label>
+                        <input type="number" id="maxResults" name="maxResults" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter max results (e.g., 100)" min="1" max="1000">
+                    </div>
+                    <div class="mb-4">
+                        <label for="papersPerPage" class="block text-sm font-medium text-gray-700 mb-2">Papers Per Page:</label>
+                        <input type="number" id="papersPerPage" name="papersPerPage" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter papers per page (e.g., 10)" min="1" max="100">
+                    </div>
+                    <div class="mb-4">
+                        <label for="dateRange" class="block text-sm font-medium text-gray-700 mb-2">Date Range (days):</label>
+                        <input type="number" id="dateRange" name="dateRange" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter date range in days (e.g., 7)" min="1" max="365">
+                    </div>
+                    <div class="mb-4">
+                        <label for="arxivCategories" class="block text-sm font-medium text-gray-700 mb-2">arXiv Categories:</label>
+                        <input type="text" id="arxivCategories" name="arxivCategories" class="w-full px-3 py-2 text-gray-700 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="Enter arXiv categories (comma-separated, e.g., cs.LG,cs.AI)">
+                    </div>
+                    <button type="submit" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">Save Settings</button>
+                </form>
+            </div>
         </div>
     </div>
 
     <!-- Verdicts Modal -->
-    <div id="verdictsModal" class="modal">
-        <div id="verdictsModalContent" class="rounded-lg">
-            <span class="close">&times;</span>
-            <h2 class="text-2xl font-bold mb-4">Verdicts</h2>
-            <div id="verdictsContainer"></div>
+    <div id="verdictsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full" style="display: none;">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">Verdicts</h3>
+                <div id="verdictsContainer" class="mt-2 px-7 py-3 text-left">
+                    <!-- Verdicts will be populated here -->
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="closeVerdictsModal" class="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300">
+                        Close
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -227,40 +183,35 @@
             });
         });
 
-        // Settings modal
-        const modal = document.getElementById("settingsModal");
-        const btn = document.getElementById("settingsBtn");
-        const span = document.getElementsByClassName("close")[0];
+        $("#closeVerdictsModal").click(function() {
+            $("#verdictsModal").hide();
+        });
 
-        btn.onclick = function() {
-            modal.style.display = "block";
+        // Settings modal
+        const settingsModal = document.getElementById("settingsModal");
+        const settingsBtn = document.getElementById("settingsBtn");
+        const settingsSpan = settingsModal.getElementsByClassName("close")[0];
+
+        settingsBtn.onclick = function() {
+            settingsModal.style.display = "block";
         }
 
-        span.onclick = function() {
-            modal.style.display = "none";
+        settingsSpan.onclick = function() {
+            settingsModal.style.display = "none";
         }
 
         window.onclick = function(event) {
-            if (event.target == modal) {
-                modal.style.display = "none";
+            if (event.target == settingsModal) {
+                settingsModal.style.display = "none";
+            }
+            if (event.target == document.getElementById("verdictsModal")) {
+                document.getElementById("verdictsModal").style.display = "none";
             }
         }
 
         $("#settingsForm").submit(function(e) {
             e.preventDefault();
             updateSettings();
-        });
-
-        // Close button for verdicts modal
-        $("#verdictsModal .close").click(function() {
-            $("#verdictsModal").hide();
-        });
-
-        // Close modal when clicking outside
-        $(window).click(function(event) {
-            if (event.target == $("#verdictsModal")[0]) {
-                $("#verdictsModal").hide();
-            }
         });
     });
 
@@ -312,84 +263,84 @@
     }
 
     function displayPapers(papers) {
-    const container = $("#papers-container");
-    container.empty();
+        const container = $("#papers-container");
+        container.empty();
 
-    papers.forEach(function(paper) {
-        const card = $("<div>").addClass("paper-card bg-white p-6 rounded-lg shadow-md cursor-pointer");
-        card.append($("<h2>").addClass("text-xl font-semibold mb-2").text(paper.title));
-        card.append($("<p>").addClass("text-sm text-gray-600 mb-2").text(`Authors: ${paper.authors}`));
-        card.append($("<p>").addClass("text-sm text-gray-600 mb-2").text(`Published: ${paper.published_date}`));
-        
-        const categoryLabel = $("<span>").addClass("category-label mb-2").text(paper.primary_category);
-        card.append(categoryLabel);
-
-        const abstractBox = $("<div>").addClass("abstract-box border border-gray-300 rounded p-4 mb-4");
-        const abstractToggle = $("<div>").addClass("flex justify-between items-center cursor-pointer");
-        abstractToggle.append($("<span>").addClass("text-blue-500").text("Abstract"));
-        const toggleIcon = $("<i>").addClass("fas fa-chevron-down text-blue-500");
-        abstractToggle.append(toggleIcon);
-        abstractBox.append(abstractToggle);
-        
-        const abstractContent = $("<p>").addClass("text-sm mt-2 hidden").text(paper.abstract);
-        abstractBox.append(abstractContent);
-        
-        abstractToggle.on("click", function(e) {
-            e.stopPropagation();
-            abstractContent.toggleClass("hidden");
-            toggleIcon.toggleClass("fa-chevron-down fa-chevron-up");
-        });
-
-        card.append(abstractBox);
-        
-        const links = $("<div>").addClass("flex space-x-4 mb-4");
-        links.append($("<a>").attr("href", paper.pdf_url).attr("target", "_blank").addClass("text-blue-500 hover:underline").text("PDF"));
-        links.append($("<a>").attr("href", paper.abstract_url).attr("target", "_blank").addClass("text-blue-500 hover:underline").text("arXiv"));
-        card.append(links);
-
-        const voteContainer = $("<div>").addClass("vote-container flex items-center space-x-2");
-        const upvoteBtn = $("<button>").addClass("text-green-500 hover:text-green-600").html('<i class="fas fa-thumbs-up"></i>');
-        const downvoteBtn = $("<button>").addClass("text-red-500 hover:text-red-600").html('<i class="fas fa-thumbs-down"></i>');
-        const voteCount = $("<span>").addClass("text-gray-600").text(paper.votes);
-
-        upvoteBtn.click(function(e) {
-            e.stopPropagation();
-            vote(paper.arxiv_id, "up", voteCount);
-        });
-
-        downvoteBtn.click(function(e) {
-            e.stopPropagation();
-            vote(paper.arxiv_id, "down", voteCount);
-        });
-
-        voteContainer.append(upvoteBtn, downvoteBtn, voteCount);
-        card.append(voteContainer);
-
-        let clickTimer = null;
-        let clickCount = 0;
-
-        card.on("click", function(e) {
-            if ($(e.target).is('a') || $(e.target).closest('a').length || 
-                $(e.target).closest('.vote-container').length) {
-                return; // Don't interfere with links or vote buttons
-            }
+        papers.forEach(function(paper) {
+            const card = $("<div>").addClass("paper-card bg-white p-6 rounded-lg shadow-md cursor-pointer");
+            card.append($("<h2>").addClass("text-xl font-semibold mb-2").text(paper.title));
+            card.append($("<p>").addClass("text-sm text-gray-600 mb-2").text(`Authors: ${paper.authors}`));
+            card.append($("<p>").addClass("text-sm text-gray-600 mb-2").text(`Published: ${paper.published_date}`));
             
-            clickCount++;
-            if (clickCount === 1) {
-                clickTimer = setTimeout(function() {
-                    vote(paper.arxiv_id, "down", voteCount);
-                    clickCount = 0;
-                }, 300);
-            } else if (clickCount === 2) {
-                clearTimeout(clickTimer);
-                vote(paper.arxiv_id, "up", voteCount);
-                clickCount = 0;
-            }
-        });
+            const categoryLabel = $("<span>").addClass("category-label mb-2").text(paper.primary_category);
+            card.append(categoryLabel);
 
-        container.append(card);
-    });
-}
+            const abstractBox = $("<div>").addClass("abstract-box border border-gray-300 rounded p-4 mb-4");
+            const abstractToggle = $("<div>").addClass("flex justify-between items-center cursor-pointer");
+            abstractToggle.append($("<span>").addClass("text-blue-500").text("Abstract"));
+            const toggleIcon = $("<i>").addClass("fas fa-chevron-down text-blue-500");
+                abstractToggle.append(toggleIcon);
+            abstractBox.append(abstractToggle);
+            
+            const abstractContent = $("<p>").addClass("text-sm mt-2 hidden").text(paper.abstract);
+            abstractBox.append(abstractContent);
+            
+            abstractToggle.on("click", function(e) {
+                e.stopPropagation();
+                abstractContent.toggleClass("hidden");
+                toggleIcon.toggleClass("fa-chevron-down fa-chevron-up");
+            });
+
+            card.append(abstractBox);
+            
+            const links = $("<div>").addClass("flex space-x-4 mb-4");
+            links.append($("<a>").attr("href", paper.pdf_url).attr("target", "_blank").addClass("text-blue-500 hover:underline").text("PDF"));
+            links.append($("<a>").attr("href", paper.abstract_url).attr("target", "_blank").addClass("text-blue-500 hover:underline").text("arXiv"));
+            card.append(links);
+
+            const voteContainer = $("<div>").addClass("vote-container flex items-center space-x-2");
+            const upvoteBtn = $("<button>").addClass("text-green-500 hover:text-green-600").html('<i class="fas fa-thumbs-up"></i>');
+            const downvoteBtn = $("<button>").addClass("text-red-500 hover:text-red-600").html('<i class="fas fa-thumbs-down"></i>');
+            const voteCount = $("<span>").addClass("text-gray-600").text(paper.votes);
+
+            upvoteBtn.click(function(e) {
+                e.stopPropagation();
+                vote(paper.arxiv_id, "up", voteCount);
+            });
+
+            downvoteBtn.click(function(e) {
+                e.stopPropagation();
+                vote(paper.arxiv_id, "down", voteCount);
+            });
+
+            voteContainer.append(upvoteBtn, downvoteBtn, voteCount);
+            card.append(voteContainer);
+
+            let clickTimer = null;
+            let clickCount = 0;
+
+            card.on("click", function(e) {
+                if ($(e.target).is('a') || $(e.target).closest('a').length || 
+                    $(e.target).closest('.vote-container').length) {
+                    return; // Don't interfere with links or vote buttons
+                }
+                
+                clickCount++;
+                if (clickCount === 1) {
+                    clickTimer = setTimeout(function() {
+                        vote(paper.arxiv_id, "down", voteCount);
+                        clickCount = 0;
+                    }, 300);
+                } else if (clickCount === 2) {
+                    clearTimeout(clickTimer);
+                    vote(paper.arxiv_id, "up", voteCount);
+                    clickCount = 0;
+                }
+            });
+
+            container.append(card);
+        });
+    }
 
     function vote(arxivId, voteType, voteCountElement) {
         $.ajax({
@@ -407,8 +358,6 @@
             }
         });
     }
-
-
 
     function getPage(page) {
         $.get(`/get_page?page=${page}`, function(data) {
@@ -464,11 +413,13 @@
         }
 
         verdicts.forEach(function(verdict, index) {
-            const verdictCard = $("<div>").addClass("bg-white p-4 rounded-lg shadow-md mb-4");
-            verdictCard.append($("<h3>").addClass("text-lg font-semibold mb-2").text(`Verdict ${index + 1}`));
+            const verdictCard = $("<div>").addClass("bg-white p-4 mb-4 rounded-lg shadow");
+            verdictCard.append($("<h4>").addClass("text-lg font-semibold mb-2").text(`Verdict ${index + 1}`));
             verdictCard.append($("<p>").addClass("mb-1").html(`<strong>Title:</strong> ${verdict.title}`));
             verdictCard.append($("<p>").addClass("mb-1").html(`<strong>Verdict:</strong> ${verdict.response}`));
-            verdictCard.append($("<p>").addClass("text-sm text-gray-600").text(`Timestamp: ${new Date(verdict.timestamp).toLocaleString()}`));
+            if (verdict.timestamp) {
+                verdictCard.append($("<p>").addClass("text-sm text-gray-600").text(`Timestamp: ${new Date(verdict.timestamp).toLocaleString()}`));
+            }
             container.append(verdictCard);
         });
     }

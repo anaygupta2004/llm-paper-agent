@@ -172,9 +172,9 @@ def vote():
     for paper in paper_data:
         if paper["arxiv_id"] == arxiv_id:
             if vote_type == "up":
-                paper["votes"] = min(paper["votes"] + 1, 1)
+                paper["votes"] += 1
             else:
-                paper["votes"] = max(paper["votes"] - 1, -1)
+                paper["votes"] -= 1
             break
 
     return jsonify({"success": True, "votes": paper["votes"]})
@@ -187,8 +187,8 @@ def download_json():
 
     is_annotation_mode = request.args.get("is_annotation_mode") == "true"
     filename = f"paper_data_{'annotation' if is_annotation_mode else 'relevance'}.json"
-    filepath = os.path.join("data", filename)
-
+    filepath = os.path.join(PROJECT_ROOT, "data", filename)
+    print(filepath)
     if not os.path.exists(filepath):
         with open(filepath, "w") as f:
             json.dump([], f)
