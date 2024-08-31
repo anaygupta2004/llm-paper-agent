@@ -7,12 +7,11 @@ from flask import (
     Response,
     stream_with_context,
 )
-import arxiv
-from datetime import datetime, timedelta, timezone
 import json
 import os
-from gptquery import GPT
 import time
+
+from arxiv_utils import fetch_recent_papers, evaluate_relevance
 
 app = Flask(__name__, static_url_path="")
 
@@ -46,74 +45,6 @@ PROJECT_ROOT = get_project_root()
 VERDICTS_FILE = os.path.join(PROJECT_ROOT, "verdicts.jsonl")
 
 
-def fetch_recent_papers():
-    search = arxiv.Search(
-        query=" OR ".join(f"cat:{cat}" for cat in ARXIV_CATEGORIES),
-        max_results=MAX_RESULTS,
-        sort_by=arxiv.SortCriterion.SubmittedDate,
-    )
-    client = arxiv.Client()
-    papers = []
-    date_limit = datetime.now(timezone.utc) - timedelta(days=DATE_RANGE)
-
-    for result in client.results(search):
-        if result.published >= date_limit:
-            papers.append(
-                {
-                    "title": result.title,
-                    "authors": ", ".join(str(author) for author in result.authors),
-                    "abstract": result.summary,
-                    "arxiv_id": result.entry_id.split("/")[-1],
-                    "pdf_url": result.pdf_url,
-                    "abstract_url": result.entry_id,
-                    "primary_category": result.primary_category,
-                    "published_date": result.published.strftime("%Y-%m-%d"),
-                    "votes": 0,
-                }
-            )
-        else:
-            break
-
-    return papers
-
-
-def evaluate_relevance(paper, preferences):
-    try:
-        llm = GPT(
-            model_name=MODEL_NAME,
-            task_prompt_text="""
-            You are an AI assistant helping an AI researcher go through relevant papers.
-            The researcher has the following preferences: {preferences}
-            Now consider the following article:
-            Title: {title}
-            Abstract: {abstract}
-            Is this paper strongly relevant? If so reply with RELEVANT, if not reply NOT_ENOUGH_RELATED.
-            """,
-            oai_key=OPENAI_KEY,
-            logging_path=VERDICTS_FILE,
-            max_num_tokens=128,
-        )
-
-        result = llm([{**paper, "preferences": preferences}])[0]
-
-        # Append the verdict to the file
-        with open(VERDICTS_FILE, "a") as f:
-            json.dump(
-                {
-                    "title": paper["title"],
-                    "response": result["response"],
-                    "timestamp": datetime.now().isoformat(),
-                },
-                f,
-            )
-            f.write("\n")
-
-        return "RELEVANT" in result["response"]
-    except Exception as e:
-        print(f"Error in evaluate_relevance: {str(e)}")
-        return False
-
-
 @app.route("/")
 def index():
     return send_from_directory(".", "index.html")
@@ -127,11 +58,17 @@ def fetch_papers():
     def generate():
         global paper_data
         paper_data = []  # Reset paper_data
-        papers = fetch_recent_papers()
+        papers = fetch_recent_papers(ARXIV_CATEGORIES,
+                                     MAX_RESULTS,
+                                     DATE_RANGE)
         total_papers = len(papers)
 
         for i, paper in enumerate(papers):
-            if is_annotation_mode or evaluate_relevance(paper, preferences):
+            if is_annotation_mode or evaluate_relevance(paper, 
+                                                        preferences,
+                                                        MODEL_NAME,
+                                                        OPENAI_KEY,
+                                                        VERDICTS_FILE,):
                 paper["votes"] = 0
                 paper["prompt"] = preferences
                 paper["model"] = MODEL_NAME
