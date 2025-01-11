@@ -10,14 +10,6 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Debug logging for configuration
-console.log("Firebase Config (without sensitive data):", {
-  hasApiKey: !!import.meta.env.VITE_FIREBASE_API_KEY,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  hasAppId: !!import.meta.env.VITE_FIREBASE_APP_ID,
-  authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
-});
-
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -29,24 +21,17 @@ googleProvider.addScope('https://www.googleapis.com/auth/userinfo.profile');
 
 export async function signInWithGoogle() {
   try {
-    if (!import.meta.env.VITE_FIREBASE_API_KEY || 
-        !import.meta.env.VITE_FIREBASE_PROJECT_ID || 
-        !import.meta.env.VITE_FIREBASE_APP_ID) {
-      throw new Error("Firebase configuration is incomplete. Please check your environment variables.");
-    }
     await signInWithRedirect(auth, googleProvider);
   } catch (error: any) {
     console.error("Google Sign-In Error:", error);
     if (error.code === 'auth/configuration-not-found') {
-      throw new Error("Firebase authentication is not properly configured. Please ensure your domain is authorized in the Firebase Console.");
+      throw new Error("Firebase authentication is not properly configured");
     } else if (error.code === 'auth/internal-error') {
-      throw new Error("Authentication service is temporarily unavailable. Please try again later.");
-    } else if (error.code === 'auth/network-request-failed') {
-      throw new Error("Network error occurred. Please check your internet connection.");
+      throw new Error("Authentication service is temporarily unavailable");
     } else if (error.code === 'auth/unauthorized-domain') {
-      throw new Error(`This domain is not authorized for Firebase Authentication. Please add ${window.location.hostname} to the authorized domains in your Firebase Console.`);
+      throw new Error("Domain not authorized in Firebase Console");
     }
-    throw new Error(error.message || "Failed to sign in with Google");
+    throw error;
   }
 }
 
@@ -58,3 +43,11 @@ export async function signOut() {
     throw new Error(error.message || "Failed to sign out");
   }
 }
+
+// Debug logging for configuration
+console.log("Firebase Config (without sensitive data):", {
+  hasApiKey: !!import.meta.env.VITE_FIREBASE_API_KEY,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  hasAppId: !!import.meta.env.VITE_FIREBASE_APP_ID,
+  authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
+});

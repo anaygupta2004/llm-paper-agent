@@ -1,11 +1,11 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { analyzePaperRelevance } from "./services/openai";
-import { getRecommendations, updateRecommendations } from "./services/recommendations";
+import { verifyAuthToken } from "./services/firebase";
 import { db } from "@db";
 import { papers, paperVotes, paperRelevanceScores, users } from "@db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { verifyAuthToken } from "./services/firebase";
+import { analyzePaperRelevance } from "./services/openai";
+import { fetchAndStorePapers } from "./services/papers";
 
 // Auth middleware
 const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
@@ -20,7 +20,9 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
     req.user = decodedToken;
 
     // Check if user exists in our database
-    const [existingUser] = await db.select().from(users).where(eq(users.firebaseId, decodedToken.uid));
+    const [existingUser] = await db.select()
+      .from(users)
+      .where(eq(users.firebaseId, decodedToken.uid));
 
     if (!existingUser) {
       // Create new user if they don't exist
@@ -47,91 +49,65 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Paper routes
+  // Papers route
   app.get("/api/papers", requireAuth, async (req: Request, res: Response) => {
-    const { preferences = "", page = "1", mode = "relevance" } = req.query;
+    const { preferences = "", page = "1" } = req.query;
     const limit = 10;
     const offset = (Number(page) - 1) * limit;
 
     try {
+      // Fetch and store papers from arXiv
+      const papers = await fetchAndStorePapers({
+        categories: ["cs.LG", "cs.AI", "cs.CL"], // Default categories
+        maxResults: 100,
+        dateRange: 7,
+      });
+
+      // Get the user's papers with relevance scores
       const [user] = await db.select()
         .from(users)
         .where(eq(users.firebaseId, req.user!.uid));
 
-      if (mode === "annotation") {
-        // In annotation mode, show papers that need feedback
-        const allPapers = await db.query.papers.findMany({
-          orderBy: [desc(papers.publishedDate)],
-          limit,
-          offset
-        });
+      const relevantPapers = await Promise.all(
+        papers.map(async (paper) => {
+          const relevance = await analyzePaperRelevance(paper.abstract, preferences as string);
+          return {
+            ...paper,
+            relevanceScore: relevance.score,
+            confidence: relevance.confidence,
+          };
+        })
+      );
 
-        const recommendations = await getRecommendations(user.id, preferences as string);
-        const needFeedbackPapers = allPapers.filter(paper => 
-          recommendations.find(r => r.paperId === paper.id && r.needsFeedback)
-        );
+      // Sort by relevance score and paginate
+      const sortedPapers = relevantPapers
+        .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
+        .slice(offset, offset + limit);
 
-        const totalCount = await db.select({ count: sql`count(*)` }).from(papers);
-        const totalPages = Math.ceil(totalCount[0].count / limit);
-
-        res.json({
-          papers: needFeedbackPapers,
-          totalPages,
-          mode: "annotation"
-        });
-      } else {
-        // In relevance mode, show the most relevant papers
-        const recommendations = await getRecommendations(user.id, preferences as string);
-
-        // Sort by score and get the page
-        const sortedRecommendations = recommendations
-          .sort((a, b) => b.score - a.score)
-          .slice(offset, offset + limit);
-
-        // Get the actual paper data
-        const recommendedPapers = await Promise.all(
-          sortedRecommendations.map(async (rec) => {
-            const [paper] = await db.select()
-              .from(papers)
-              .where(eq(papers.id, rec.paperId));
-
-            return {
-              ...paper,
-              relevanceScore: rec.score,
-              confidence: rec.confidence
-            };
-          })
-        );
-
-        const totalPages = Math.ceil(recommendations.length / limit);
-
-        res.json({
-          papers: recommendedPapers,
-          totalPages,
-          mode: "relevance"
-        });
-      }
+      res.json({
+        papers: sortedPapers,
+        totalPages: Math.ceil(papers.length / limit),
+      });
     } catch (error) {
       console.error("Error fetching papers:", error);
       res.status(500).json({ error: "Failed to fetch papers" });
     }
   });
 
+  // Vote route
   app.post("/api/papers/vote", requireAuth, async (req: Request, res: Response) => {
     const { paperId, vote } = req.body;
 
     try {
-      const [user] = await db.select().from(users).where(eq(users.firebaseId, req.user!.uid));
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.firebaseId, req.user!.uid));
 
-      // Record the vote
       await db.insert(paperVotes).values({
         paperId,
         userId: user.id,
-        vote
+        vote: vote === 1 ? 1 : -1,
       });
-
-      // Update recommendations based on feedback
-      await updateRecommendations(user.id, paperId, vote);
 
       res.json({ success: true });
     } catch (error) {
@@ -140,28 +116,23 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Metrics route
   app.get("/api/metrics", requireAuth, async (req: Request, res: Response) => {
     try {
-      const [user] = await db.select().from(users).where(eq(users.firebaseId, req.user!.uid));
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.firebaseId, req.user!.uid));
 
-      const userVotes = await db.select()
+      const votes = await db.select()
         .from(paperVotes)
         .where(eq(paperVotes.userId, user.id));
 
-      const relevanceScores = await db.select()
-        .from(paperRelevanceScores)
-        .where(eq(paperRelevanceScores.userId, user.id));
-
       const metrics = {
-        totalVotes: userVotes.length,
-        upvotes: userVotes.filter(v => v.vote === 1).length,
-        downvotes: userVotes.filter(v => v.vote === -1).length,
-        averageRelevanceScore: relevanceScores.length > 0 
-          ? relevanceScores.reduce((acc, curr) => acc + curr.score, 0) / relevanceScores.length 
-          : 0,
-        averageConfidence: relevanceScores.length > 0
-          ? relevanceScores.reduce((acc, curr) => acc + curr.confidence, 0) / relevanceScores.length
-          : 0
+        totalVotes: votes.length,
+        upvotes: votes.filter(v => v.vote === 1).length,
+        downvotes: votes.filter(v => v.vote === -1).length,
+        averageRelevanceScore: 0,
+        averageConfidence: 0,
       };
 
       res.json(metrics);
