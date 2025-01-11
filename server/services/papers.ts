@@ -87,9 +87,11 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
             }
           }
 
+          // Check if paper already exists
           const existing = await db.select()
             .from(papers)
-            .where(eq(papers.arxivId, paper.arxivId));
+            .where(eq(papers.arxivId, paper.arxivId))
+            .limit(1);
 
           if (!existing.length) {
             await db.insert(papers).values(paper);
@@ -107,6 +109,9 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
     return results;
   } catch (error) {
     console.error("Error fetching papers from arXiv:", error);
+    if (error.response?.data) {
+      console.error("arXiv API response:", error.response.data);
+    }
     return [];
   }
 }

@@ -92,8 +92,7 @@ export function registerRoutes(app: Express): Server {
           .where(eq(paperVotes.userId, user.id));
 
         if (votedPapers.length > 0) {
-          const votedIds = votedPapers.map(v => v.paperId);
-          query = query.where(sql`${papers.id} NOT IN (${votedIds.join(",")})`);
+          query = query.where(sql`${papers.id} NOT IN (${votedPapers.map(v => v.paperId).join(',')})`);
         }
       }
 
@@ -178,12 +177,36 @@ export function registerRoutes(app: Express): Server {
         .from(paperVotes)
         .where(eq(paperVotes.userId, user.id));
 
+      // Get papers with relevance scores
+      const votedPaperIds = votes.map(v => v.paperId);
+      const relevanceScores = await db.select()
+        .from(paperRelevanceScores)
+        .where(eq(paperRelevanceScores.userId, user.id));
+
+      // Handle empty voted papers array
+      const votedPapers = votedPaperIds.length > 0 
+        ? await db.select()
+            .from(papers)
+            .where(sql`${papers.id} IN (${votedPaperIds.join(",")})`)
+        : [];
+
+      // Combine papers with their relevance scores
+      const papersWithScores = votedPapers.map(paper => ({
+        ...paper,
+        relevanceScore: relevanceScores.find(s => s.paperId === paper.id)?.score || 0,
+      }));
+
       const metrics = {
         totalVotes: votes.length,
         upvotes: votes.filter(v => v.vote === 1).length,
         downvotes: votes.filter(v => v.vote === -1).length,
-        averageRelevanceScore: 0,
-        averageConfidence: 0,
+        averageRelevanceScore: relevanceScores.length 
+          ? relevanceScores.reduce((acc, curr) => acc + curr.score, 0) / relevanceScores.length 
+          : 0,
+        averageConfidence: relevanceScores.length
+          ? relevanceScores.reduce((acc, curr) => acc + curr.confidence, 0) / relevanceScores.length
+          : 0,
+        papers: papersWithScores,
       };
 
       res.json(metrics);
