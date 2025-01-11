@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, signInWithRedirect, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 
 // Initialize Firebase configuration
 const firebaseConfig = {
@@ -18,20 +18,25 @@ export const googleProvider = new GoogleAuthProvider();
 // Configure additional scopes
 googleProvider.addScope('https://www.googleapis.com/auth/userinfo.email');
 googleProvider.addScope('https://www.googleapis.com/auth/userinfo.profile');
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
 
 export async function signInWithGoogle() {
   try {
-    await signInWithRedirect(auth, googleProvider);
+    // Use signInWithPopup instead of redirect for better error handling
+    const result = await signInWithPopup(auth, googleProvider);
+    return result.user;
   } catch (error: any) {
     console.error("Google Sign-In Error:", error);
-    if (error.code === 'auth/configuration-not-found') {
-      throw new Error("Firebase authentication is not properly configured");
-    } else if (error.code === 'auth/internal-error') {
-      throw new Error("Authentication service is temporarily unavailable");
+    if (error.code === 'auth/popup-closed-by-user') {
+      throw new Error("Sign-in cancelled");
+    } else if (error.code === 'auth/popup-blocked') {
+      throw new Error("Pop-up was blocked by the browser. Please allow pop-ups and try again.");
     } else if (error.code === 'auth/unauthorized-domain') {
-      throw new Error("Domain not authorized in Firebase Console");
+      throw new Error("This domain is not authorized for Firebase Authentication. Please contact support.");
     }
-    throw error;
+    throw new Error("Failed to sign in with Google. Please try again.");
   }
 }
 
@@ -40,12 +45,12 @@ export async function signOut() {
     await auth.signOut();
   } catch (error: any) {
     console.error("Sign Out Error:", error);
-    throw new Error(error.message || "Failed to sign out");
+    throw new Error("Failed to sign out");
   }
 }
 
 // Debug logging for configuration
-console.log("Firebase Config (without sensitive data):", {
+console.debug("Firebase Config:", {
   hasApiKey: !!import.meta.env.VITE_FIREBASE_API_KEY,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   hasAppId: !!import.meta.env.VITE_FIREBASE_APP_ID,

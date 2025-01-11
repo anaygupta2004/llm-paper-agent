@@ -4,9 +4,47 @@ import { signInWithGoogle } from "@/lib/firebase";
 import { Link } from "wouter";
 import { Home, BarChart2, Settings, LogOut } from "lucide-react";
 import { auth } from "@/lib/firebase";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 export function NavBar() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
+  const handleSignIn = async () => {
+    if (isSigningIn) return;
+
+    setIsSigningIn(true);
+    try {
+      await signInWithGoogle();
+      // Success toast will be shown by useAuth hook
+    } catch (error: any) {
+      toast({
+        title: "Authentication Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await auth.signOut();
+      toast({
+        title: "Signed out successfully",
+        description: "You have been signed out of your account.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to sign out. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <nav className="border-b">
@@ -18,7 +56,7 @@ export function NavBar() {
               Home
             </Button>
           </Link>
-          
+
           {user && (
             <>
               <Link href="/metrics">
@@ -45,15 +83,18 @@ export function NavBar() {
               </span>
               <Button
                 variant="outline"
-                onClick={() => auth.signOut()}
+                onClick={handleSignOut}
               >
                 <LogOut className="h-5 w-5 mr-2" />
                 Sign Out
               </Button>
             </div>
           ) : (
-            <Button onClick={signInWithGoogle}>
-              Sign In with Google
+            <Button 
+              onClick={handleSignIn}
+              disabled={isSigningIn}
+            >
+              {isSigningIn ? "Signing in..." : "Sign In with Google"}
             </Button>
           )}
         </div>
