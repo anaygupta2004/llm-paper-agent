@@ -46,17 +46,13 @@ export function registerRoutes(app: Express): Server {
       // Get all papers
       const allPapers = await db.select()
         .from(papers)
-        .orderBy(desc(papers.publishedDate))
-        .execute();
+        .orderBy(desc(papers.publishedDate));
 
       // If searching or in relevance mode, analyze papers
       if (preferences || mode === "relevance") {
-        console.log("\n============== ANALYZING PAPERS ==============");
-
         const scoredPapers = await Promise.all(
           allPapers.map(async (paper) => {
             try {
-              console.log(`\nAnalyzing paper: ${paper.title}`);
               const relevance = await analyzePaperRelevance(
                 paper.abstract,
                 preferences as string || (user.preferences as UserPreferences)?.preferences || ""
@@ -74,22 +70,9 @@ export function registerRoutes(app: Express): Server {
           })
         );
 
-        // Filter and sort papers
         const rankedPapers = scoredPapers
           .filter(paper => paper.relevanceScore >= 50)
           .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
-
-        console.log("\n============== TOP 20 PAPERS ==============");
-        rankedPapers.slice(0, 20).forEach((paper, index) => {
-          console.log(`
-Paper #${index + 1}:
-Title: ${paper.title}
-Relevance Score: ${paper.relevanceScore}%
-Confidence: ${paper.confidence}%
-Explanation: ${paper.explanation}
-Abstract: ${paper.abstract.substring(0, 300)}...
-==============================================`);
-        });
 
         const paginatedPapers = rankedPapers.slice(offset, offset + limit);
         return res.json({
@@ -120,7 +103,6 @@ Abstract: ${paper.abstract.substring(0, 300)}...
         .from(users)
         .where(eq(users.firebaseId, req.user!.uid));
 
-      // Get user's votes with paper details
       const votes = await db.select({
         paper: papers,
         vote: paperVotes,
@@ -134,7 +116,6 @@ Abstract: ${paper.abstract.substring(0, 300)}...
         eq(paperRelevanceScores.userId, user.id)
       ));
 
-      // Format data for export
       const exportData = votes.map(({ paper, vote, relevance }) => ({
         title: paper.title,
         abstract: paper.abstract,
@@ -196,13 +177,14 @@ Abstract: ${paper.abstract.substring(0, 300)}...
     }
   });
 
-  // Metrics route
+  // Updated metrics route with algorithm performance metrics
   app.get("/api/metrics", requireAuth, async (req: Request, res: Response) => {
     try {
       const [user] = await db.select()
         .from(users)
         .where(eq(users.firebaseId, req.user!.uid));
 
+      // Get all votes for this user
       const votes = await db.select()
         .from(paperVotes)
         .where(eq(paperVotes.userId, user.id));
@@ -214,33 +196,84 @@ Abstract: ${paper.abstract.substring(0, 300)}...
         .from(paperRelevanceScores)
         .where(eq(paperRelevanceScores.userId, user.id));
 
-      // Handle empty voted papers array
-      const votedPapers = votedPaperIds.length > 0
-        ? await db.select()
-            .from(papers)
-            .where(inArray(papers.id, votedPaperIds))
-        : [];
+      // Get voted papers with their categories
+      const votedPapers = await db.select()
+        .from(papers)
+        .where(inArray(papers.id, votedPaperIds));
 
-      // Combine papers with their relevance scores
-      const papersWithScores = votedPapers.map(paper => ({
-        ...paper,
-        relevanceScore: relevanceScores.find(s => s.paperId === paper.id)?.score || 0,
-      }));
+      // Calculate metrics by category
+      const categoryMetrics: { [key: string]: {
+        totalPapers: number;
+        relevantPapers: number;
+        correctPredictions: number;
+        averageConfidence: number;
+      }} = {};
 
-      const metrics = {
+      for (const paper of votedPapers) {
+        const vote = votes.find(v => v.paperId === paper.id);
+        const score = relevanceScores.find(s => s.paperId === paper.id);
+
+        if (!vote || !score) continue;
+
+        if (!categoryMetrics[paper.primaryCategory]) {
+          categoryMetrics[paper.primaryCategory] = {
+            totalPapers: 0,
+            relevantPapers: 0,
+            correctPredictions: 0,
+            averageConfidence: 0,
+          };
+        }
+
+        const metrics = categoryMetrics[paper.primaryCategory];
+        metrics.totalPapers++;
+
+        if (vote.vote === 1) {
+          metrics.relevantPapers++;
+        }
+
+        const predicted = score.score >= 70;
+        const actual = vote.vote === 1;
+        if (predicted === actual) {
+          metrics.correctPredictions++;
+        }
+
+        metrics.averageConfidence += score.confidence;
+      }
+
+      // Calculate overall metrics
+      let totalPapers = 0;
+      let totalRelevantPapers = 0;
+      let totalCorrectPredictions = 0;
+
+      Object.values(categoryMetrics).forEach(metrics => {
+        totalPapers += metrics.totalPapers;
+        totalRelevantPapers += metrics.relevantPapers;
+        totalCorrectPredictions += metrics.correctPredictions;
+      });
+
+      // Calculate average relevance score and confidence
+      const averageRelevanceScore = relevanceScores.length
+        ? relevanceScores.reduce((acc, curr) => acc + curr.score, 0) / relevanceScores.length
+        : 0;
+
+      const averageConfidence = relevanceScores.length
+        ? relevanceScores.reduce((acc, curr) => acc + curr.confidence, 0) / relevanceScores.length
+        : 0;
+
+      res.json({
         totalVotes: votes.length,
         upvotes: votes.filter(v => v.vote === 1).length,
         downvotes: votes.filter(v => v.vote === -1).length,
-        averageRelevanceScore: relevanceScores.length
-          ? relevanceScores.reduce((acc, curr) => acc + curr.score, 0) / relevanceScores.length
-          : 0,
-        averageConfidence: relevanceScores.length
-          ? relevanceScores.reduce((acc, curr) => acc + curr.confidence, 0) / relevanceScores.length
-          : 0,
-        papers: papersWithScores,
-      };
-
-      res.json(metrics);
+        totalPapers,
+        totalRelevantPapers,
+        totalCorrectPredictions,
+        averageRelevanceScore,
+        averageConfidence,
+        categoryMetrics,
+        learningProgress: Math.min(100, (votes.length / 20) * 100),
+        precision: totalCorrectPredictions / (totalPapers || 1),
+        recall: totalCorrectPredictions / (totalRelevantPapers || 1),
+      });
     } catch (error) {
       console.error("Error fetching metrics:", error);
       res.status(500).json({ error: "Failed to fetch metrics" });
@@ -269,7 +302,6 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
       .where(eq(users.firebaseId, decodedToken.uid));
 
     if (!existingUser) {
-      // Create new user if they don't exist
       await db.insert(users).values({
         firebaseId: decodedToken.uid,
         email: decodedToken.email!,
