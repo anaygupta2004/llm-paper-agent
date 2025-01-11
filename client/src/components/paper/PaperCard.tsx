@@ -9,6 +9,7 @@ interface PaperCardProps {
   paper: Paper & {
     relevanceScore?: number;
     confidence?: number;
+    explanation?: string;
   };
   showVoting?: boolean;
   mode?: "annotation" | "relevance";
@@ -55,6 +56,12 @@ export function PaperCard({ paper, showVoting = true, mode = "relevance" }: Pape
               <div className="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-500 mt-2">
                 <AlertCircle className="h-4 w-4" />
                 <span>Low confidence prediction - your feedback will help improve recommendations</span>
+              </div>
+            )}
+
+            {paper.explanation && (
+              <div className="mt-2 p-3 bg-muted/50 rounded-lg">
+                <p className="text-sm text-muted-foreground">{paper.explanation}</p>
               </div>
             )}
           </div>

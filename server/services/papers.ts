@@ -13,7 +13,7 @@ interface FetchPapersOptions {
 }
 
 export async function fetchAndStorePapers(options: FetchPapersOptions) {
-  const { categories, maxResults, dateRange, preferences } = options;
+  const { categories, maxResults = 50, dateRange = 30, preferences } = options;
 
   try {
     // Generate an optimized search query if preferences are provided
@@ -32,8 +32,12 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
       searchQueryString = categories.map(cat => `cat:${cat}`).join("+OR+");
     }
 
-    // Build the arXiv API URL with the search query
-    const url = `http://export.arxiv.org/api/query?search_query=${searchQueryString}&start=0&max_results=${maxResults}&sortBy=lastUpdatedDate&sortOrder=descending`;
+    // Build the arXiv API URL with the search query and date filter
+    const dateLimit = new Date();
+    dateLimit.setDate(dateLimit.getDate() - dateRange);
+    const dateString = dateLimit.toISOString().split('T')[0];
+
+    const url = `http://export.arxiv.org/api/query?search_query=${searchQueryString}+AND+submittedDate:[${dateString}+TO+*]&start=0&max_results=${maxResults}&sortBy=lastUpdatedDate&sortOrder=descending`;
     console.log("Fetching papers from arXiv with URL:", url);
 
     const response = await axios.get(url);
@@ -43,17 +47,17 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
     });
 
     const entries = Array.isArray(result.feed.entry) ? result.feed.entry : [result.feed.entry];
-    const dateLimit = new Date();
-    dateLimit.setDate(dateLimit.getDate() - dateRange);
 
     console.log(`Processing ${entries.length} papers from arXiv...`);
     const results = [];
+    const batchSize = 5; // Process papers in batches to improve performance
 
-    for (const entry of entries) {
-      if (!entry) continue;
+    // Process papers in batches
+    for (let i = 0; i < entries.length; i += batchSize) {
+      const batch = entries.slice(i, i + batchSize);
+      const batchPromises = batch.map(async (entry) => {
+        if (!entry) return null;
 
-      const published = new Date(entry.published);
-      if (published >= dateLimit) {
         try {
           const paper = {
             arxivId: entry.id.split("/").pop()!,
@@ -67,47 +71,39 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
             primaryCategory: entry.primary_category ? 
               entry.primary_category.term : 
               (Array.isArray(entry.category) ? entry.category[0].term : entry.category.term),
-            publishedDate: published,
+            publishedDate: new Date(entry.published),
           };
 
           // If preferences are provided, analyze paper relevance before storing
           if (preferences) {
-            try {
-              const relevance = await analyzePaperRelevance(paper.abstract, preferences);
-              console.log(`Relevance score for paper ${paper.arxivId}: ${relevance.score}`);
+            const relevance = await analyzePaperRelevance(paper.abstract, preferences);
+            console.log(`Relevance score for paper ${paper.arxivId}: ${relevance.score}`);
 
-              // Store papers with relevance score above threshold or high confidence in methodology
-              if (relevance.score >= 50 || 
-                  (relevance.methodologySimilarity && relevance.methodologySimilarity >= 70)) {
+            // Higher threshold (70%) for more relevant results
+            if (relevance.score >= 70) {
+              // Check if paper already exists
+              const existing = await db.select()
+                .from(papers)
+                .where(eq(papers.arxivId, paper.arxivId))
+                .limit(1);
 
-                // Check if paper already exists
-                const existing = await db.select()
-                  .from(papers)
-                  .where(eq(papers.arxivId, paper.arxivId))
-                  .limit(1);
+              if (!existing.length) {
+                const [storedPaper] = await db.insert(papers)
+                  .values(paper)
+                  .returning();
 
-                if (!existing.length) {
-                  const [storedPaper] = await db.insert(papers)
-                    .values(paper)
-                    .returning();
+                // Store relevance scores for better recommendations
+                await db.insert(paperRelevanceScores).values({
+                  paperId: storedPaper.id,
+                  score: relevance.score,
+                  confidence: relevance.confidence,
+                  modelResponse: relevance
+                });
 
-                  // Store relevance scores for better recommendations
-                  await db.insert(paperRelevanceScores).values({
-                    paperId: storedPaper.id,
-                    score: relevance.score,
-                    confidence: relevance.confidence,
-                    modelResponse: relevance
-                  });
-
-                  results.push({ ...paper, relevance });
-                  console.log(`Stored new paper: ${paper.arxivId}`);
-                }
-              } else {
-                console.log(`Skipping paper ${paper.arxivId} due to low relevance score`);
+                return { ...paper, relevance };
               }
-            } catch (error) {
-              console.error(`Error analyzing paper relevance for ${paper.arxivId}:`, error);
-              // Continue with paper if relevance analysis fails
+            } else {
+              console.log(`Skipping paper ${paper.arxivId} due to low relevance score`);
             }
           } else {
             // Without preferences, store all papers
@@ -118,23 +114,27 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
 
             if (!existing.length) {
               await db.insert(papers).values(paper);
-              results.push(paper);
-              console.log(`Stored new paper: ${paper.arxivId}`);
+              return paper;
             }
           }
         } catch (error) {
           console.error(`Failed to process paper:`, error);
-          continue;
         }
-      }
+        return null;
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults.filter(Boolean));
+
+      console.log(`Processed batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(entries.length/batchSize)}`);
     }
 
     console.log(`Successfully processed ${results.length} new papers`);
     return results;
   } catch (error) {
     console.error("Error fetching papers from arXiv:", error);
-    if (error.response?.data) {
-      console.error("arXiv API response:", error.response.data);
+    if ((error as any).response?.data) {
+      console.error("arXiv API response:", (error as any).response.data);
     }
     return [];
   }

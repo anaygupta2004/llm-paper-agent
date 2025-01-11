@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, BookOpen, ThumbsUp, AlertCircle, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { Progress } from "@/components/ui/progress";
 
 export default function Home() {
   const { user } = useAuth();
@@ -20,6 +21,7 @@ export default function Home() {
   const [mode, setMode] = useState<"annotation" | "relevance">("annotation");
   const [page, setPage] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchProgress, setSearchProgress] = useState(0);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -38,14 +40,29 @@ export default function Home() {
     }
 
     setIsSearching(true);
+    setSearchProgress(0);
     setPage(1);
 
     try {
+      // Start progress animation
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress = Math.min(95, progress + 5); // Never reach 100% until complete
+        setSearchProgress(progress);
+      }, 500);
+
       // Update preferences to trigger the search
       setPreferences(searchInput.trim());
       // Invalidate existing queries to force a fresh fetch
       await queryClient.invalidateQueries({ queryKey: ['/api/papers'] });
       await refetch();
+
+      // Complete progress
+      clearInterval(progressInterval);
+      setSearchProgress(100);
+
+      // Reset progress after animation
+      setTimeout(() => setSearchProgress(0), 500);
     } catch (error) {
       console.error('Search error:', error);
       toast({
@@ -176,6 +193,15 @@ export default function Home() {
                 </>
               )}
             </Button>
+
+            {searchProgress > 0 && (
+              <div className="space-y-2">
+                <Progress value={searchProgress} className="h-2" />
+                <p className="text-sm text-muted-foreground text-center">
+                  Analyzing papers for relevance...
+                </p>
+              </div>
+            )}
           </form>
         </Card>
       </motion.div>
