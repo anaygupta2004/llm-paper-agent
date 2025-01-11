@@ -9,7 +9,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, BookOpen, ThumbsUp, AlertCircle } from "lucide-react";
+import { Search, BookOpen, ThumbsUp, AlertCircle, Loader2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function Home() {
   const { user } = useAuth();
@@ -17,16 +18,24 @@ export default function Home() {
   const [mode, setMode] = useState<"annotation" | "relevance">("annotation");
   const [page, setPage] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
+  const queryClient = useQueryClient();
 
-  const { data, isLoading } = usePapers(preferences, page);
+  const { data, isLoading, refetch } = usePapers(preferences, page, mode);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSearching(true);
     setPage(1);
-    // Add a small delay to show the loading animation
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setIsSearching(false);
+
+    try {
+      // Invalidate existing queries to force a fresh fetch
+      await queryClient.invalidateQueries({ queryKey: ['/api/papers'] });
+      await refetch();
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   if (!user) {
@@ -64,6 +73,8 @@ export default function Home() {
       </div>
     );
   }
+
+  const showLoadingState = isLoading || isSearching;
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 space-y-8">
@@ -121,21 +132,20 @@ export default function Home() {
                 value={preferences}
                 onChange={(e) => setPreferences(e.target.value)}
                 className="h-32"
+                disabled={showLoadingState}
               />
             </div>
 
             <Button
               type="submit"
               className="w-full"
-              disabled={isSearching}
+              disabled={showLoadingState}
             >
-              {isSearching ? (
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                >
-                  <Search className="h-4 w-4 mr-2" />
-                </motion.div>
+              {showLoadingState ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {isSearching ? 'Searching...' : 'Loading...'}
+                </span>
               ) : (
                 <>
                   <Search className="h-4 w-4 mr-2" />
@@ -159,7 +169,7 @@ export default function Home() {
             <div className="space-y-4">
               <PaperList
                 papers={data.papers}
-                loading={isLoading}
+                loading={showLoadingState}
                 showVoting={mode === "annotation"}
                 mode={mode}
               />
@@ -169,14 +179,14 @@ export default function Home() {
                   <Button
                     variant="outline"
                     onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
+                    disabled={page === 1 || showLoadingState}
                   >
                     Previous
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setPage(p => Math.min(data.totalPages, p + 1))}
-                    disabled={page === data.totalPages}
+                    disabled={page === data.totalPages || showLoadingState}
                   >
                     Next
                   </Button>
