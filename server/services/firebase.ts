@@ -7,7 +7,8 @@ const app: App = initializeApp({
   credential: cert({
     projectId: process.env.FIREBASE_PROJECT_ID,
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    // Handle both formats of private key storage
+    privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
   }),
 });
 
@@ -24,9 +25,31 @@ declare global {
 
 export async function verifyAuthToken(token: string): Promise<DecodedIdToken> {
   try {
-    return await auth.verifyIdToken(token);
-  } catch (error) {
-    console.error("Error verifying auth token:", error);
+    const decodedToken = await auth.verifyIdToken(token);
+    console.debug('[Firebase] Token verified for user:', {
+      uid: decodedToken.uid,
+      email: decodedToken.email,
+      timestamp: new Date().toISOString()
+    });
+    return decodedToken;
+  } catch (error: any) {
+    console.error("[Firebase] Auth error:", {
+      error: error.message,
+      code: error.code,
+      timestamp: new Date().toISOString()
+    });
     throw error;
   }
+}
+
+/**
+ * Utility function to extract and validate Firebase token from request
+ */
+export async function extractAndVerifyToken(authHeader?: string): Promise<DecodedIdToken> {
+  if (!authHeader?.startsWith('Bearer ')) {
+    throw new Error('No authentication token provided');
+  }
+
+  const token = authHeader.split('Bearer ')[1];
+  return verifyAuthToken(token);
 }

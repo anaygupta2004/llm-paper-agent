@@ -1,87 +1,34 @@
 import express, { type Request, Response, NextFunction } from "express";
-import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { corsMiddleware } from "./middleware/cors";
+import { setupStaticServing } from "./middleware/static";
 import path from "path";
 
+// Initialize express app
 const app = express();
 
-// Configure CORS based on environment
-const isDevelopment = process.env.NODE_ENV !== 'production';
-const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      callback(null, true);
-      return;
-    }
+// Apply CORS first
+app.use(corsMiddleware);
 
-    try {
-      // Parse the origin URL to match subdomains
-      const url = new URL(origin);
-      const hostname = url.hostname;
-
-      // Check if origin is allowed
-      const allowedDomains = [
-        'arxiv-agent.replit.app', // Production domain
-        'replit.dev',            // Replit preview domains
-        'replit.com',            // Replit editor domains
-        'localhost',             // Local development
-        '127.0.0.1'             // Local development
-      ];
-
-      const isAllowed = allowedDomains.some(domain => 
-        hostname === domain || 
-        hostname.endsWith(`.${domain}`)
-      );
-
-      if (isAllowed) {
-        callback(null, true);
-        return;
-      }
-
-      console.debug('CORS blocked request from:', {
-        origin,
-        hostname,
-        allowedDomains,
-        isDevelopment
-      });
-
-      callback(new Error('Not allowed by CORS'));
-    } catch (error) {
-      console.error('CORS origin parsing error:', error);
-      callback(new Error('Invalid origin'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With',
-    'Accept',
-    'Origin'
-  ],
-  optionsSuccessStatus: 200
-};
-
-// Apply CORS first, before any other middleware
-app.use(cors(corsOptions));
+// Basic middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Request logging middleware with detailed error logging
+// Request logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
-  // Detailed request logging
-  console.debug('Request:', {
+  console.debug('[Request]', {
     method: req.method,
     path: req.path,
-    headers: req.headers,
     query: req.query,
+    headers: {
+      ...req.headers,
+      cookie: undefined // Don't log cookies
+    },
     timestamp: new Date().toISOString()
   });
 
@@ -96,7 +43,7 @@ app.use((req, res, next) => {
     const logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
 
     if (res.statusCode >= 400) {
-      console.error('Error Response:', {
+      console.error('[Response Error]', {
         statusCode: res.statusCode,
         path: req.path,
         duration,
@@ -111,13 +58,18 @@ app.use((req, res, next) => {
   next();
 });
 
+// Health check endpoint
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 (async () => {
   const server = registerRoutes(app);
 
-  // Global error handler with detailed logging
+  // Global error handler
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-    console.error('Server Error:', {
-      error: err,
+    console.error('[Server Error]', {
+      error: err.message,
       stack: err.stack,
       path: req.path,
       method: req.method,
@@ -127,78 +79,30 @@ app.use((req, res, next) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ 
+    res.status(status).json({
       error: message,
       path: req.path,
       timestamp: new Date().toISOString()
     });
   });
 
-  if (isDevelopment) {
+  // Setup appropriate server based on environment
+  if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
-    // In production, serve static files from the dist/public directory
-    const distPath = path.resolve(process.cwd(), "dist", "public");
-
-    // Log the static file configuration
-    console.debug('Static file serving configuration:', {
-      distPath,
-      exists: require('fs').existsSync(distPath),
-      files: require('fs').readdirSync(distPath)
-    });
-
-    // Serve static files with proper MIME types
-    app.use(express.static(distPath, {
-      maxAge: '1d',
-      etag: true,
-      index: false, // Don't serve index.html automatically
-      setHeaders: (res, path) => {
-        // Set proper cache headers
-        if (path.endsWith('.html')) {
-          res.setHeader('Cache-Control', 'no-cache');
-        } else {
-          res.setHeader('Cache-Control', 'public, max-age=86400');
-        }
-      }
-    }));
-
-    // SPA fallback - serve index.html for all non-API routes
-    app.get('*', (req, res, next) => {
-      if (req.path.startsWith('/api')) {
-        return next();
-      }
-
-      const indexPath = path.join(distPath, 'index.html');
-      console.debug('Serving SPA fallback:', {
-        requestPath: req.path,
-        servingFile: indexPath,
-        exists: require('fs').existsSync(indexPath)
-      });
-
-      res.sendFile(indexPath, (err) => {
-        if (err) {
-          console.error('Error serving index.html:', err);
-          res.status(500).send('Error serving application');
-        }
-      });
-    });
+    setupStaticServing(app);
   }
 
+  // Start server
   const PORT = Number(process.env.PORT) || 5000;
   server.listen(PORT, "0.0.0.0", () => {
     log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-    // Log the current environment and configuration
-    console.debug('Server configuration:', {
+    console.debug('[Server] Configuration:', {
       env: app.get('env'),
       port: PORT,
-      corsEnabled: true,
       nodeEnv: process.env.NODE_ENV,
-      allowedOrigins: [
-        'https://arxiv-agent.replit.app',
-        '*.replit.dev',
-        'replit.com',
-        'accounts.google.com'
-      ]
+      cors: true,
+      static: app.get('env') !== 'development',
     });
   });
 })();
