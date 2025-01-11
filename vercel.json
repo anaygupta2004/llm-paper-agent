@@ -14,8 +14,18 @@
       "dest": "/api/$1"
     },
     {
-      "src": "/assets/(.*)",
-      "dest": "/assets/$1"
+      "src": "/public/assets/(.*)",
+      "dest": "/public/assets/$1",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      }
+    },
+    {
+      "src": "/(.*)\\.(?:ico|png|jpg|jpeg|gif|svg|css|js|woff2?|ttf|eot)",
+      "dest": "/public/assets/$1",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      }
     },
     {
       "src": "/(.*)",
