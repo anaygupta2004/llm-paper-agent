@@ -38,6 +38,15 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
 };
 
 export function registerRoutes(app: Express): Server {
+  // Environment variables route for client
+  app.get("/api/config", (_req, res) => {
+    res.json({
+      firebaseApiKey: process.env.FIREBASE_API_KEY,
+      firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
+      firebaseAppId: process.env.FIREBASE_APP_ID,
+    });
+  });
+
   // Paper routes
   app.get("/api/papers", requireAuth, async (req: Request, res: Response) => {
     const { preferences = "", page = "1", mode = "relevance" } = req.query;
