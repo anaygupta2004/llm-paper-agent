@@ -6,25 +6,37 @@ import { papers, paperVotes, paperRelevanceScores, users } from "@db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { verifyAuthToken } from "./services/firebase";
 
-export function registerRoutes(app: Express): Server {
-  // Auth middleware
-  const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const token = req.headers.authorization?.split("Bearer ")[1];
-      if (!token) {
-        res.status(401).json({ error: "No authentication token provided" });
-        return;
-      }
-
-      const decodedToken = await verifyAuthToken(token);
-      req.user = decodedToken;
-      next();
-    } catch (error) {
-      console.error("Auth error:", error);
-      res.status(401).json({ error: "Authentication failed" });
+// Auth middleware
+const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const token = req.headers.authorization?.split("Bearer ")[1];
+    if (!token) {
+      res.status(401).json({ error: "No authentication token provided" });
+      return;
     }
-  };
 
+    const decodedToken = await verifyAuthToken(token);
+    req.user = decodedToken;
+
+    // Check if user exists in our database
+    const [existingUser] = await db.select().from(users).where(eq(users.firebaseId, decodedToken.uid));
+
+    if (!existingUser) {
+      // Create new user if they don't exist
+      await db.insert(users).values({
+        firebaseId: decodedToken.uid,
+        email: decodedToken.email!,
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error("Auth error:", error);
+    res.status(401).json({ error: "Authentication failed" });
+  }
+};
+
+export function registerRoutes(app: Express): Server {
   // Paper routes
   app.get("/api/papers", requireAuth, async (req: Request, res: Response) => {
     const { preferences = "", page = "1" } = req.query;
@@ -44,7 +56,7 @@ export function registerRoutes(app: Express): Server {
 
           await db.insert(paperRelevanceScores).values({
             paperId: paper.id,
-            userId: req.user!.uid,
+            userId: (await db.select().from(users).where(eq(users.firebaseId, req.user!.uid)).limit(1))[0].id,
             score: relevance.score,
             confidence: relevance.confidence,
             modelResponse: relevance
@@ -74,9 +86,11 @@ export function registerRoutes(app: Express): Server {
     const { paperId, vote } = req.body;
 
     try {
+      const [user] = await db.select().from(users).where(eq(users.firebaseId, req.user!.uid));
+
       await db.insert(paperVotes).values({
         paperId,
-        userId: req.user!.uid,
+        userId: user.id,
         vote
       });
 
@@ -89,13 +103,15 @@ export function registerRoutes(app: Express): Server {
 
   app.get("/api/metrics", requireAuth, async (req: Request, res: Response) => {
     try {
+      const [user] = await db.select().from(users).where(eq(users.firebaseId, req.user!.uid));
+
       const userVotes = await db.select()
         .from(paperVotes)
-        .where(eq(paperVotes.userId, req.user!.uid));
+        .where(eq(paperVotes.userId, user.id));
 
       const relevanceScores = await db.select()
         .from(paperRelevanceScores)
-        .where(eq(paperRelevanceScores.userId, req.user!.uid));
+        .where(eq(paperRelevanceScores.userId, user.id));
 
       const metrics = {
         totalVotes: userVotes.length,
@@ -113,6 +129,24 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Error fetching metrics:", error);
       res.status(500).json({ error: "Failed to fetch metrics" });
+    }
+  });
+
+  // Settings route
+  app.post("/api/settings", requireAuth, async (req: Request, res: Response) => {
+    const { preferences, categories } = req.body;
+
+    try {
+      const [user] = await db.select().from(users).where(eq(users.firebaseId, req.user!.uid));
+
+      await db.update(users)
+        .set({ preferences: { preferences, categories } })
+        .where(eq(users.id, user.id));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      res.status(500).json({ error: "Failed to save settings" });
     }
   });
 
