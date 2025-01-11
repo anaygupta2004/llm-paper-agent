@@ -10,10 +10,11 @@ interface FetchPapersOptions {
   maxResults: number;
   dateRange: number;
   preferences?: string;
+  userId?: number;
 }
 
 export async function fetchAndStorePapers(options: FetchPapersOptions) {
-  const { categories, maxResults = 50, dateRange = 7, preferences } = options;
+  const { categories, maxResults = 50, dateRange = 7, preferences, userId } = options;
 
   try {
     console.log("\n========== STARTING PAPER SEARCH ==========");
@@ -28,7 +29,7 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
     if (preferences) {
       console.log("\n========== GENERATING SEARCH QUERY ==========");
       try {
-        searchQueryString = await generateSearchQuery(preferences);
+        searchQueryString = await generateSearchQuery(preferences, userId);
         console.log("Generated search query:", searchQueryString);
       } catch (error) {
         console.error("Error generating search query:", error);
@@ -67,7 +68,7 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
       const batch = entries.slice(i, i + batchSize);
       console.log(`\nProcessing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(entries.length/batchSize)}`);
 
-      const batchPromises = batch.map(async (entry) => {
+      const batchPromises = batch.map(async (entry: any) => {
         if (!entry) return null;
 
         try {
@@ -88,7 +89,7 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
 
           // If preferences are provided, analyze paper relevance before storing
           if (preferences) {
-            const relevance = await analyzePaperRelevance(paper.abstract, preferences);
+            const relevance = await analyzePaperRelevance(paper.abstract, preferences, userId);
             console.log(`\n----- Paper Analysis -----
 Title: ${paper.title}
 Relevance Score: ${relevance.score}%
@@ -116,6 +117,7 @@ Abstract: ${paper.abstract.substring(0, 200)}...
                 // Store relevance scores for better recommendations
                 await db.insert(paperRelevanceScores).values({
                   paperId: storedPaper.id,
+                  userId: userId, // Added userId here
                   score: relevance.score,
                   confidence: relevance.confidence,
                   modelResponse: relevance
@@ -179,7 +181,7 @@ Abstract: ${paper.abstract.substring(0, 150)}...
   }
 }
 
-export async function getPaperRelevance(paperId: number, preferences: string) {
+export async function getPaperRelevance(paperId: number, preferences: string, userId?: number) {
   const [paper] = await db.select()
     .from(papers)
     .where(eq(papers.id, paperId))
@@ -189,7 +191,7 @@ export async function getPaperRelevance(paperId: number, preferences: string) {
     throw new Error("Paper not found");
   }
 
-  const relevance = await analyzePaperRelevance(paper.abstract, preferences);
+  const relevance = await analyzePaperRelevance(paper.abstract, preferences, userId);
   return relevance;
 }
 
@@ -203,7 +205,7 @@ export async function updateRelevanceScores(userId: number, preferences: string)
   // Update relevance scores based on preferences and voting history
   for (const paper of userPapers) {
     try {
-      const relevance = await analyzePaperRelevance(paper.abstract, preferences);
+      const relevance = await analyzePaperRelevance(paper.abstract, preferences, userId);
 
       await db.insert(paperRelevanceScores)
         .values({

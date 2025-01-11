@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Key } from "lucide-react";
+import { Eye, EyeOff, Key, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function Settings() {
   const { user } = useAuth();
@@ -14,9 +15,11 @@ export default function Settings() {
   const [preferences, setPreferences] = useState("");
   const [categories, setCategories] = useState("cs.LG,cs.AI,cs.CL");
   const [openaiApiKey, setOpenaiApiKey] = useState("");
+  const [hasApiKey, setHasApiKey] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [validatingKey, setValidatingKey] = useState(false);
+  const [isFirstLogin, setIsFirstLogin] = useState(false);
 
   useEffect(() => {
     // Load existing settings
@@ -32,10 +35,16 @@ export default function Settings() {
           const data = await response.json();
           setPreferences(data.preferences || "");
           setCategories(data.categories?.join(",") || "cs.LG,cs.AI,cs.CL");
-          setOpenaiApiKey(data.openaiApiKey || "");
+          setHasApiKey(!!data.openaiApiKey);
+          setIsFirstLogin(!data.openaiApiKey);
         }
       } catch (error) {
         console.error("Error loading settings:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load settings. Please try again.",
+          variant: "destructive"
+        });
       }
     };
 
@@ -44,13 +53,6 @@ export default function Settings() {
     }
   }, [user]);
 
-  const validateApiKey = async (key: string) => {
-    if (!key.startsWith('sk-')) {
-      return { valid: false, message: 'Invalid API key format. Must start with "sk-"' };
-    }
-    return { valid: true };
-  };
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -58,89 +60,81 @@ export default function Settings() {
     try {
       if (openaiApiKey) {
         setValidatingKey(true);
-        const validation = await validateApiKey(openaiApiKey);
-        if (!validation.valid) {
-          toast({
-            title: "Invalid API Key",
-            description: validation.message,
-            variant: "destructive"
-          });
-          setValidatingKey(false);
-          setSaving(false);
-          return;
+        const response = await fetch("/api/settings", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${await user?.getIdToken()}`
+          },
+          body: JSON.stringify({
+            preferences,
+            categories: categories.split(",").map(c => c.trim()),
+            openaiApiKey
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to save settings");
         }
-        setValidatingKey(false);
+
+        setHasApiKey(true);
+        setIsFirstLogin(false);
+
+        toast({
+          title: "Settings saved",
+          description: "Your preferences and API key have been updated successfully."
+        });
+      } else if (!hasApiKey) {
+        toast({
+          title: "API Key Required",
+          description: "Please provide your OpenAI API key to use the recommendation features.",
+          variant: "destructive"
+        });
+        return;
+      } else {
+        // Save other settings without modifying API key
+        await fetch("/api/settings", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${await user?.getIdToken()}`
+          },
+          body: JSON.stringify({
+            preferences,
+            categories: categories.split(",").map(c => c.trim())
+          })
+        });
+
+        toast({
+          title: "Settings saved",
+          description: "Your preferences have been updated successfully."
+        });
       }
-
-      const response = await fetch("/api/settings", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${await user?.getIdToken()}`
-        },
-        body: JSON.stringify({
-          preferences,
-          categories: categories.split(",").map(c => c.trim()),
-          openaiApiKey: openaiApiKey || null
-        })
-      });
-
-      if (!response.ok) throw new Error("Failed to save settings");
-
-      toast({
-        title: "Settings saved",
-        description: "Your preferences have been updated successfully."
-      });
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to save settings. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to save settings",
         variant: "destructive"
       });
     } finally {
       setSaving(false);
+      setValidatingKey(false);
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
+    <div className="max-w-2xl mx-auto space-y-6">
+      <h1 className="text-2xl font-bold">Settings</h1>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Research Preferences</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSave} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="preferences">Default Research Interests</Label>
-              <Textarea
-                id="preferences"
-                placeholder="Describe your research interests..."
-                value={preferences}
-                onChange={(e) => setPreferences(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="categories">arXiv Categories</Label>
-              <Input
-                id="categories"
-                placeholder="e.g., cs.LG,cs.AI,cs.CL"
-                value={categories}
-                onChange={(e) => setCategories(e.target.value)}
-              />
-              <p className="text-sm text-muted-foreground">
-                Comma-separated list of arXiv categories to monitor
-              </p>
-            </div>
-
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Save Settings"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      {isFirstLogin && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Please provide your OpenAI API key to enable paper recommendations and analysis features.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
@@ -148,6 +142,9 @@ export default function Settings() {
             <Key className="h-5 w-5" />
             OpenAI API Key
           </CardTitle>
+          <CardDescription>
+            Required for paper analysis and recommendations. Your key will be stored securely.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSave} className="space-y-4">
@@ -175,16 +172,58 @@ export default function Settings() {
                 </button>
               </div>
               <p className="text-sm text-muted-foreground">
-                Provide your own OpenAI API key to use for paper analysis and recommendations. 
-                Your key will be stored securely and used only for this application.
+                Your OpenAI API key will be used exclusively for analyzing papers and generating recommendations.
               </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {openaiApiKey ? "✓ API key is set" : "No API key set"}
+              <p className="text-sm font-medium">
+                {hasApiKey ? (
+                  <span className="text-green-600">✓ API key is set</span>
+                ) : (
+                  <span className="text-red-600">No API key set</span>
+                )}
               </p>
             </div>
 
             <Button type="submit" disabled={saving || validatingKey}>
               {saving ? "Saving..." : validatingKey ? "Validating API Key..." : "Save API Key"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Research Preferences</CardTitle>
+          <CardDescription>
+            Configure your research interests and paper categories to receive better recommendations.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSave} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="preferences">Research Interests</Label>
+              <Textarea
+                id="preferences"
+                placeholder="Describe your research interests..."
+                value={preferences}
+                onChange={(e) => setPreferences(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="categories">arXiv Categories</Label>
+              <Input
+                id="categories"
+                placeholder="e.g., cs.LG,cs.AI,cs.CL"
+                value={categories}
+                onChange={(e) => setCategories(e.target.value)}
+              />
+              <p className="text-sm text-muted-foreground">
+                Comma-separated list of arXiv categories to monitor
+              </p>
+            </div>
+
+            <Button type="submit" disabled={saving || (!hasApiKey && !openaiApiKey)}>
+              {saving ? "Saving..." : "Save Preferences"}
             </Button>
           </form>
         </CardContent>

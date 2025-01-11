@@ -7,8 +7,8 @@ export const users = pgTable("users", {
   email: text("email").unique().notNull(),
   preferences: jsonb("preferences").default({
     preferences: "",
-    categories: [],
-    openaiApiKey: null // Added API key storage in preferences
+    categories: ["cs.LG", "cs.AI", "cs.CL"],
+    openaiApiKey: null
   }),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -46,7 +46,8 @@ export const paperRelevanceScores = pgTable("paper_relevance_scores", {
     explanation: "",
     keywords: [],
     topicSimilarity: 0,
-    methodologySimilarity: 0
+    methodologySimilarity: 0,
+    learningProgress: 0 // Added to track per-user learning progress
   }),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -63,7 +64,7 @@ export type NewPaperRelevanceScore = typeof paperRelevanceScores.$inferInsert;
 export interface UserPreferences {
   preferences: string;
   categories: string[];
-  openaiApiKey?: string | null; // Added API key to preferences interface
+  openaiApiKey?: string | null;
 }
 
 export interface ModelResponse {
@@ -73,4 +74,5 @@ export interface ModelResponse {
   keywords?: string[];
   topicSimilarity?: number;
   methodologySimilarity?: number;
+  learningProgress?: number;
 }
