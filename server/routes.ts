@@ -61,46 +61,46 @@ export function registerRoutes(app: Express): Server {
         .from(users)
         .where(eq(users.firebaseId, req.user!.uid));
 
-      // Fetch fresh papers from arXiv if we're running low
-      const existingPapersCount = await db.select({ count: sql<number>`count(*)` })
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Check if we need to fetch more papers
+      const paperCount = await db.select({ count: sql<number>`count(*)` })
         .from(papers)
         .execute();
 
-      if (existingPapersCount[0].count < limit * 2) {
-        try {
-          await fetchAndStorePapers({
-            categories: ["cs.LG", "cs.AI", "cs.CL"], // Default categories
-            maxResults: 100,
-            dateRange: 7,
-          });
-        } catch (error) {
-          console.error("Error fetching new papers:", error);
-          // Continue with existing papers if fetch fails
-        }
+      if (paperCount[0].count < limit * 2) {
+        console.log("Fetching new papers from arXiv...");
+        await fetchAndStorePapers({
+          categories: ["cs.LG", "cs.AI", "cs.CL"],
+          maxResults: 100,
+          dateRange: 7,
+        });
       }
 
-      // Get papers that haven't been voted on for annotation mode
+      // Base query for papers
       let query = db.select()
         .from(papers)
         .orderBy(desc(papers.publishedDate));
 
+      // Modify query based on mode
       if (mode === "annotation") {
-        const votedPaperIds = await db.select()
+        const votedPapers = await db.select()
           .from(paperVotes)
           .where(eq(paperVotes.userId, user.id));
 
-        if (votedPaperIds.length > 0) {
-          query = query.where(
-            sql`${papers.id} NOT IN ${votedPaperIds.map(v => v.paperId)}`
-          );
+        if (votedPapers.length > 0) {
+          const votedIds = votedPapers.map(v => v.paperId);
+          query = query.where(sql`${papers.id} NOT IN (${votedIds.join(",")})`);
         }
       }
 
-      // Get all available papers
+      // Get papers
       const allPapers = await query.execute();
 
-      // Apply relevance scoring if needed
-      let relevantPapers = allPapers;
+      // Process papers based on mode
+      let processedPapers = allPapers;
       if (mode === "relevance" && preferences) {
         const scoredPapers = await Promise.all(
           allPapers.map(async (paper) => {
@@ -122,20 +122,25 @@ export function registerRoutes(app: Express): Server {
           })
         );
 
-        // Sort by relevance score for relevance mode
-        relevantPapers = scoredPapers.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+        // Sort by relevance score
+        processedPapers = scoredPapers.sort((a, b) => 
+          (b.relevanceScore || 0) - (a.relevanceScore || 0)
+        );
       }
 
       // Paginate results
-      const paginatedPapers = relevantPapers.slice(offset, offset + limit);
+      const paginatedPapers = processedPapers.slice(offset, offset + limit);
 
       res.json({
         papers: paginatedPapers,
-        totalPages: Math.ceil(relevantPapers.length / limit),
+        totalPages: Math.ceil(processedPapers.length / limit),
       });
     } catch (error) {
       console.error("Error processing papers request:", error);
-      res.status(500).json({ error: "Failed to process request" });
+      res.status(500).json({ 
+        error: "Failed to process request", 
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 

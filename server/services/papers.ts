@@ -1,4 +1,5 @@
-import { search } from "arxiv";
+import axios from "axios";
+import { parseStringPromise } from "xml2js";
 import { papers } from "@db/schema";
 import { db } from "@db";
 import { analyzePaperRelevance } from "../services/openai";
@@ -15,45 +16,38 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
 
   try {
     // Build the category query string
-    const categoryQuery = categories.map(cat => `cat:${cat}`).join(" OR ");
+    const categoryQuery = categories.map(cat => `cat:${cat}`).join("+OR+");
+    const url = `http://export.arxiv.org/api/query?search_query=${categoryQuery}&start=0&max_results=${maxResults}&sortBy=lastUpdatedDate&sortOrder=descending`;
 
-    // Create a promise to handle the search
-    const searchPromise = new Promise((resolve) => {
-      const results: any[] = [];
-      search({
-        searchQuery: categoryQuery,
-        start: 0,
-        maxResults: maxResults,
-        sortBy: 'lastUpdatedDate',
-        sortOrder: 'descending'
-      }, (result) => {
-        if (result) {
-          results.push(result);
-        }
-      }, () => {
-        resolve(results);
-      });
+    const response = await axios.get(url);
+    const result = await parseStringPromise(response.data, {
+      explicitArray: false,
+      mergeAttrs: true
     });
 
-    const searchResults = await searchPromise;
+    const entries = Array.isArray(result.feed.entry) ? result.feed.entry : [result.feed.entry];
     const dateLimit = new Date();
     dateLimit.setDate(dateLimit.getDate() - dateRange);
 
     const results = [];
-    for (const result of searchResults) {
-      const published = new Date(result.published);
+    for (const entry of entries) {
+      if (!entry) continue;
+
+      const published = new Date(entry.published);
       if (published >= dateLimit) {
         try {
           const paper = {
-            arxivId: result.id.split("/").pop()!,
-            title: result.title,
-            authors: Array.isArray(result.authors) ? result.authors.join(", ") : result.authors,
-            abstract: result.summary,
-            pdfUrl: Array.isArray(result.links) ? 
-              result.links.find((link: string) => link.includes("pdf")) || result.id + ".pdf" :
-              result.id + ".pdf",
-            abstractUrl: result.id,
-            primaryCategory: Array.isArray(result.categories) ? result.categories[0] : result.categories,
+            arxivId: entry.id.split("/").pop()!,
+            title: entry.title.replace(/\s+/g, " ").trim(),
+            authors: Array.isArray(entry.author) ? 
+              entry.author.map((a: any) => a.name).join(", ") : 
+              entry.author.name,
+            abstract: entry.summary.replace(/\s+/g, " ").trim(),
+            pdfUrl: `${entry.id.replace("abs", "pdf")}`,
+            abstractUrl: entry.id,
+            primaryCategory: entry.primary_category ? 
+              entry.primary_category.term : 
+              (Array.isArray(entry.category) ? entry.category[0].term : entry.category.term),
             publishedDate: published,
           };
 
