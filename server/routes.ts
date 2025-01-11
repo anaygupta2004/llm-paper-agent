@@ -82,9 +82,12 @@ export function registerRoutes(app: Express): Server {
 
       // Analyze paper relevance
       if (mode === "relevance" && preferences) {
+        console.log("\n============== ANALYZING PAPERS ==============");
+
         const scoredPapers = await Promise.all(
           allPapers.map(async (paper) => {
             try {
+              console.log(`\nAnalyzing paper: ${paper.title}`);
               const relevance = await analyzePaperRelevance(paper.abstract, preferences as string);
               return {
                 ...paper,
@@ -105,16 +108,16 @@ export function registerRoutes(app: Express): Server {
           .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
 
         // Log top 20 papers with their analysis
-        console.log("\n=================== TOP 20 PAPERS ANALYSIS ===================");
+        console.log("\n============== TOP 20 PAPERS ==============");
         rankedPapers.slice(0, 20).forEach((paper, index) => {
           console.log(`
-=== Paper #${index + 1} ===
+Paper #${index + 1}:
 Title: ${paper.title}
-Abstract: ${paper.abstract.substring(0, 300)}...
 Relevance Score: ${paper.relevanceScore}%
 Confidence: ${paper.confidence}%
 Explanation: ${paper.explanation}
-===========================================`);
+Abstract: ${paper.abstract.substring(0, 300)}...
+==============================================`);
         });
 
         // Return paginated results
