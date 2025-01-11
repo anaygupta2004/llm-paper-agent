@@ -15,9 +15,10 @@ interface PaperCardProps {
     explanation?: string;
   };
   mode?: "annotation" | "relevance";
+  showVoting?: boolean;
 }
 
-export function PaperCard({ paper, mode = "relevance" }: PaperCardProps) {
+export function PaperCard({ paper, mode = "relevance", showVoting = true }: PaperCardProps) {
   const voteMutation = useVotePaper();
   const [isOpen, setIsOpen] = useState(false);
   const [vote, setVote] = useState<1 | -1 | null>(null);
@@ -27,7 +28,7 @@ export function PaperCard({ paper, mode = "relevance" }: PaperCardProps) {
     // If clicking the same button again, toggle it off
     if (vote === newVote) {
       setVote(null);
-      voteMutation.mutate({ paperId: paper.id, vote: 0 }); // 0 to remove vote
+      voteMutation.mutate({ paperId: paper.id, vote: newVote }); // Remove vote by sending same vote again
     } else {
       setVote(newVote);
       voteMutation.mutate({ paperId: paper.id, vote: newVote });
@@ -100,34 +101,36 @@ export function PaperCard({ paper, mode = "relevance" }: PaperCardProps) {
       </CardContent>
 
       <CardFooter className="flex justify-between">
-        <div className="flex gap-2">
-          <Button
-            variant={vote === 1 ? "default" : "outline"}
-            size="sm"
-            onClick={() => handleVote(1)}
-            disabled={voteMutation.isPending}
-            className={cn(
-              "transition-colors duration-200",
-              vote === 1 && "bg-green-600 hover:bg-green-700"
-            )}
-          >
-            <ThumbsUp className="h-4 w-4 mr-1" />
-            Relevant
-          </Button>
-          <Button
-            variant={vote === -1 ? "default" : "outline"}
-            size="sm"
-            onClick={() => handleVote(-1)}
-            disabled={voteMutation.isPending}
-            className={cn(
-              "transition-colors duration-200",
-              vote === -1 && "bg-red-600 hover:bg-red-700"
-            )}
-          >
-            <ThumbsDown className="h-4 w-4 mr-1" />
-            Not Relevant
-          </Button>
-        </div>
+        {showVoting && (
+          <div className="flex gap-2">
+            <Button
+              variant={vote === 1 ? "default" : "outline"}
+              size="sm"
+              onClick={() => handleVote(1)}
+              disabled={voteMutation.isPending}
+              className={cn(
+                "transition-colors duration-200",
+                vote === 1 && "bg-green-600 hover:bg-green-700"
+              )}
+            >
+              <ThumbsUp className="h-4 w-4 mr-1" />
+              Relevant
+            </Button>
+            <Button
+              variant={vote === -1 ? "default" : "outline"}
+              size="sm"
+              onClick={() => handleVote(-1)}
+              disabled={voteMutation.isPending}
+              className={cn(
+                "transition-colors duration-200",
+                vote === -1 && "bg-red-600 hover:bg-red-700"
+              )}
+            >
+              <ThumbsDown className="h-4 w-4 mr-1" />
+              Not Relevant
+            </Button>
+          </div>
+        )}
         <span className="text-sm text-muted-foreground">
           {new Date(paper.publishedDate).toLocaleDateString()}
         </span>
