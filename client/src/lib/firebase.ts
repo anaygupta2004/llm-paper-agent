@@ -10,6 +10,14 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+// Debug logging for configuration
+console.log("Firebase Config (without sensitive data):", {
+  hasApiKey: !!import.meta.env.VITE_FIREBASE_API_KEY,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  hasAppId: !!import.meta.env.VITE_FIREBASE_APP_ID,
+  authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
+});
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -35,6 +43,8 @@ export async function signInWithGoogle() {
       throw new Error("Authentication service is temporarily unavailable. Please try again later.");
     } else if (error.code === 'auth/network-request-failed') {
       throw new Error("Network error occurred. Please check your internet connection.");
+    } else if (error.code === 'auth/unauthorized-domain') {
+      throw new Error(`This domain is not authorized for Firebase Authentication. Please add ${window.location.hostname} to the authorized domains in your Firebase Console.`);
     }
     throw new Error(error.message || "Failed to sign in with Google");
   }
