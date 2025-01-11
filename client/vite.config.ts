@@ -10,12 +10,12 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
-  base: process.env.NODE_ENV === 'production' ? '/' : '/',
+  base: '/',
   build: {
     outDir: "dist",
     emptyOutDir: true,
     sourcemap: true,
-    assetsDir: "public/assets", 
+    assetsDir: "assets",
     rollupOptions: {
       output: {
         manualChunks: {
@@ -23,9 +23,9 @@ export default defineConfig({
           tanstack: ['@tanstack/react-query'],
           firebase: ['firebase/app', 'firebase/auth']
         },
-        assetFileNames: 'public/assets/[name]-[hash][extname]',
-        chunkFileNames: 'public/assets/[name]-[hash].js',
-        entryFileNames: 'public/assets/[name]-[hash].js'
+        assetFileNames: 'assets/[name]-[hash][extname]',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js'
       }
     }
   },

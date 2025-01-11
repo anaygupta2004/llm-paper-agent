@@ -40,17 +40,11 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    const logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-
-    if (res.statusCode >= 400) {
-      console.error('[Response Error]', {
-        statusCode: res.statusCode,
-        path: req.path,
-        duration,
-        response: capturedJsonResponse,
-        headers: res.getHeaders()
-      });
-    } else if (path.startsWith("/api")) {
+    if (path.startsWith("/api")) {
+      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse) {
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      }
       log(logLine);
     }
   });
