@@ -31,6 +31,10 @@ export async function signInWithGoogle() {
     console.error("Google Sign-In Error:", error);
     if (error.code === 'auth/configuration-not-found') {
       throw new Error("Firebase authentication is not properly configured. Please ensure your domain is authorized in the Firebase Console.");
+    } else if (error.code === 'auth/internal-error') {
+      throw new Error("Authentication service is temporarily unavailable. Please try again later.");
+    } else if (error.code === 'auth/network-request-failed') {
+      throw new Error("Network error occurred. Please check your internet connection.");
     }
     throw new Error(error.message || "Failed to sign in with Google");
   }

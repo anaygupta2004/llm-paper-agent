@@ -22,9 +22,17 @@ export function useAuth() {
       .catch((error) => {
         console.error("Redirect Error:", error);
         if (error.code !== 'auth/redirect-cancelled-by-user') {
+          let errorMessage = "An error occurred during sign in.";
+
+          if (error.code === 'auth/configuration-not-found') {
+            errorMessage = "Firebase configuration error. Please ensure the domain is authorized.";
+          } else if (error.code === 'auth/popup-closed-by-user') {
+            return; // Don't show error for user-initiated cancellation
+          }
+
           toast({
             title: "Authentication Error",
-            description: error.message,
+            description: errorMessage,
             variant: "destructive"
           });
         }
