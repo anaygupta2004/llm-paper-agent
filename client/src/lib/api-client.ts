@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NODE_ENV === 'production'
+const API_BASE_URL = import.meta.env.PROD
   ? 'https://arxiv-agent.vercel.app/api'
   : '/api';
 
@@ -20,16 +20,38 @@ export async function fetchWithAuth(
   options: RequestInit = {}
 ) {
   const url = `${API_BASE_URL}${endpoint}`;
+
+  // Get the token from Firebase Auth if available
+  const token = await getAuthToken();
+
+  const headers = {
+    ...options.headers,
+    'Content-Type': 'application/json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(url, {
     ...options,
     credentials: 'include',
-    headers: {
-      ...options.headers,
-      'Content-Type': 'application/json',
-    },
+    headers,
   });
 
   return handleResponse(response);
+}
+
+async function getAuthToken(): Promise<string | null> {
+  try {
+    const { auth } = await import('@/lib/firebase');
+    const user = auth.currentUser;
+    if (!user) return null;
+    return user.getIdToken();
+  } catch (error) {
+    console.error('Error getting auth token:', error);
+    return null;
+  }
 }
 
 export const apiClient = {
