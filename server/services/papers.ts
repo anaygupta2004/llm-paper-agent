@@ -13,13 +13,13 @@ interface FetchPapersOptions {
 }
 
 export async function fetchAndStorePapers(options: FetchPapersOptions) {
-  const { categories, maxResults = 50, dateRange = 30, preferences } = options;
+  const { categories, maxResults = 50, dateRange = 7, preferences } = options;
 
   try {
     // Generate an optimized search query if preferences are provided
     let searchQueryString: string;
     if (preferences) {
-      console.log("Generating optimized search query from preferences...");
+      console.log("Generating optimized search query from preferences:", preferences);
       try {
         searchQueryString = await generateSearchQuery(preferences);
         console.log("Generated search query:", searchQueryString);
@@ -77,7 +77,16 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
           // If preferences are provided, analyze paper relevance before storing
           if (preferences) {
             const relevance = await analyzePaperRelevance(paper.abstract, preferences);
-            console.log(`Relevance score for paper ${paper.arxivId}: ${relevance.score}`);
+            console.log(`\nPaper Analysis:
+              Title: ${paper.title}
+              Relevance Score: ${relevance.score}
+              Confidence: ${relevance.confidence}
+              Abstract: ${paper.abstract.substring(0, 200)}...
+              Explanation: ${relevance.explanation}
+              Keywords: ${relevance.keywords?.join(", ")}
+              Topic Similarity: ${relevance.topicSimilarity}
+              Methodology Similarity: ${relevance.methodologySimilarity}
+            `);
 
             // Higher threshold (70%) for more relevant results
             if (relevance.score >= 70) {
@@ -103,7 +112,7 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
                 return { ...paper, relevance };
               }
             } else {
-              console.log(`Skipping paper ${paper.arxivId} due to low relevance score`);
+              console.log(`Skipping paper ${paper.arxivId} due to low relevance score: ${relevance.score}`);
             }
           } else {
             // Without preferences, store all papers
@@ -124,13 +133,31 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
       });
 
       const batchResults = await Promise.all(batchPromises);
-      results.push(...batchResults.filter(Boolean));
+      const validResults = batchResults.filter(Boolean);
+
+      // Sort batch by relevance score before adding to results
+      const sortedResults = validResults.sort((a: any, b: any) => 
+        (b.relevance?.score || 0) - (a.relevance?.score || 0)
+      );
+
+      results.push(...sortedResults);
 
       console.log(`Processed batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(entries.length/batchSize)}`);
     }
 
-    console.log(`Successfully processed ${results.length} new papers`);
-    return results;
+    // Log top 20 papers
+    console.log("\nTop 20 Papers by Relevance:");
+    results.slice(0, 20).forEach((paper: any, index: number) => {
+      console.log(`\n#${index + 1}:
+        Title: ${paper.title}
+        Score: ${paper.relevance?.score}
+        Confidence: ${paper.relevance?.confidence}
+        Explanation: ${paper.relevance?.explanation}
+        Abstract Preview: ${paper.abstract.substring(0, 100)}...`);
+    });
+
+    console.log(`\nSuccessfully processed ${results.length} new papers`);
+    return results.slice(0, maxResults); // Return only the top papers up to maxResults
   } catch (error) {
     console.error("Error fetching papers from arXiv:", error);
     if ((error as any).response?.data) {
