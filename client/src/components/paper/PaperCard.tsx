@@ -6,6 +6,7 @@ import { useVotePaper } from "@/hooks/usePapers";
 import { Progress } from "@/components/ui/progress";
 import { useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
 interface PaperCardProps {
   paper: Paper & {
@@ -19,9 +20,12 @@ interface PaperCardProps {
 export function PaperCard({ paper, mode = "relevance" }: PaperCardProps) {
   const voteMutation = useVotePaper();
   const [isOpen, setIsOpen] = useState(false);
+  const [vote, setVote] = useState<1 | -1 | null>(null);
 
-  const handleVote = (vote: 1 | -1) => {
-    voteMutation.mutate({ paperId: paper.id, vote });
+  const handleVote = (newVote: 1 | -1) => {
+    if (voteMutation.isPending) return;
+    setVote(newVote);
+    voteMutation.mutate({ paperId: paper.id, vote: newVote });
   };
 
   return (
@@ -92,19 +96,27 @@ export function PaperCard({ paper, mode = "relevance" }: PaperCardProps) {
       <CardFooter className="flex justify-between">
         <div className="flex gap-2">
           <Button
-            variant="outline"
+            variant={vote === 1 ? "default" : "outline"}
             size="sm"
             onClick={() => handleVote(1)}
             disabled={voteMutation.isPending}
+            className={cn(
+              "transition-colors duration-200",
+              vote === 1 && "bg-green-600 hover:bg-green-700"
+            )}
           >
             <ThumbsUp className="h-4 w-4 mr-1" />
             Relevant
           </Button>
           <Button
-            variant="outline"
+            variant={vote === -1 ? "default" : "outline"}
             size="sm"
             onClick={() => handleVote(-1)}
             disabled={voteMutation.isPending}
+            className={cn(
+              "transition-colors duration-200",
+              vote === -1 && "bg-red-600 hover:bg-red-700"
+            )}
           >
             <ThumbsDown className="h-4 w-4 mr-1" />
             Not Relevant
