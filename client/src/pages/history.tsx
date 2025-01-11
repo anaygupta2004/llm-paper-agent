@@ -61,7 +61,7 @@ export default function History() {
             <PaperList 
               papers={data?.papers || []} 
               loading={isLoading}
-              mode="history"
+              mode="relevance"
               showVoting={false}
             />
           )}

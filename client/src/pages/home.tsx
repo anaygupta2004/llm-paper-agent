@@ -44,7 +44,6 @@ export default function Home() {
     setPage(1);
 
     try {
-      // Start progress animation
       let progress = 0;
       const progressInterval = setInterval(() => {
         progress = Math.min(95, progress + 5);
@@ -74,7 +73,6 @@ export default function Home() {
       const result = await exportMutation.mutateAsync();
       if (!result) return;
 
-      // Create and download the file
       const url = window.URL.createObjectURL(new Blob([JSON.stringify(result)], { type: 'application/json' }));
       const a = document.createElement('a');
       a.href = url;
@@ -106,7 +104,7 @@ export default function Home() {
           transition={{ duration: 0.5 }}
         >
           <Card className="p-8">
-            <h1 className="text-4xl font-bold mb-4">Welcome to Paper Recommender</h1>
+            <h1 className="text-4xl font-bold mb-4">Welcome to ArXiv Research Assistant</h1>
             <p className="text-lg text-muted-foreground mb-6">
               Discover relevant research papers with personalized recommendations powered by your feedback.
             </p>
@@ -149,7 +147,7 @@ export default function Home() {
               variant="outline"
               size="sm"
               onClick={handleExport}
-              disabled={exportMutation.isLoading}
+              disabled={exportMutation.isPending}
             >
               <Download className="h-4 w-4 mr-2" />
               Export Annotations
