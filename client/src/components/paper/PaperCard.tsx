@@ -1,15 +1,20 @@
 import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ThumbsUp, ThumbsDown, ExternalLink } from "lucide-react";
+import { ThumbsUp, ThumbsDown, ExternalLink, AlertCircle } from "lucide-react";
 import { Paper } from "@db/schema";
 import { useVotePaper } from "@/hooks/usePapers";
+import { Progress } from "@/components/ui/progress";
 
 interface PaperCardProps {
-  paper: Paper;
+  paper: Paper & {
+    relevanceScore?: number;
+    confidence?: number;
+  };
   showVoting?: boolean;
+  mode?: "annotation" | "relevance";
 }
 
-export function PaperCard({ paper, showVoting = true }: PaperCardProps) {
+export function PaperCard({ paper, showVoting = true, mode = "relevance" }: PaperCardProps) {
   const voteMutation = useVotePaper();
 
   const handleVote = (vote: 1 | -1) => {
@@ -20,7 +25,10 @@ export function PaperCard({ paper, showVoting = true }: PaperCardProps) {
     <Card className="w-full">
       <CardHeader>
         <div className="flex justify-between items-start">
-          <h3 className="text-xl font-semibold">{paper.title}</h3>
+          <div>
+            <h3 className="text-xl font-semibold">{paper.title}</h3>
+            <p className="text-sm text-muted-foreground">{paper.authors}</p>
+          </div>
           <a 
             href={paper.pdfUrl} 
             target="_blank" 
@@ -30,11 +38,27 @@ export function PaperCard({ paper, showVoting = true }: PaperCardProps) {
             <ExternalLink className="h-5 w-5" />
           </a>
         </div>
-        <p className="text-sm text-muted-foreground">{paper.authors}</p>
       </CardHeader>
-      
+
       <CardContent>
         <p className="text-sm">{paper.abstract}</p>
+
+        {mode === "relevance" && paper.relevanceScore !== undefined && (
+          <div className="mt-4 space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">Relevance Score</span>
+              <span className="text-sm text-muted-foreground">{Math.round(paper.relevanceScore)}%</span>
+            </div>
+            <Progress value={paper.relevanceScore} className="h-2" />
+
+            {paper.confidence && paper.confidence < 50 && (
+              <div className="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-500 mt-2">
+                <AlertCircle className="h-4 w-4" />
+                <span>Low confidence prediction - your feedback will help improve recommendations</span>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
 
       {showVoting && (
