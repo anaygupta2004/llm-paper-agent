@@ -51,46 +51,91 @@ export function registerRoutes(app: Express): Server {
 
   // Papers route
   app.get("/api/papers", requireAuth, async (req: Request, res: Response) => {
-    const { preferences = "", page = "1" } = req.query;
+    const { preferences = "", page = "1", mode = "relevance" } = req.query;
     const limit = 10;
     const offset = (Number(page) - 1) * limit;
 
     try {
-      // Fetch and store papers from arXiv
-      const papers = await fetchAndStorePapers({
-        categories: ["cs.LG", "cs.AI", "cs.CL"], // Default categories
-        maxResults: 100,
-        dateRange: 7,
-      });
-
-      // Get the user's papers with relevance scores
+      // Get the user's ID
       const [user] = await db.select()
         .from(users)
         .where(eq(users.firebaseId, req.user!.uid));
 
-      const relevantPapers = await Promise.all(
-        papers.map(async (paper) => {
-          const relevance = await analyzePaperRelevance(paper.abstract, preferences as string);
-          return {
-            ...paper,
-            relevanceScore: relevance.score,
-            confidence: relevance.confidence,
-          };
-        })
-      );
+      // Fetch fresh papers from arXiv if we're running low
+      const existingPapersCount = await db.select({ count: sql<number>`count(*)` })
+        .from(papers)
+        .execute();
 
-      // Sort by relevance score and paginate
-      const sortedPapers = relevantPapers
-        .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
-        .slice(offset, offset + limit);
+      if (existingPapersCount[0].count < limit * 2) {
+        try {
+          await fetchAndStorePapers({
+            categories: ["cs.LG", "cs.AI", "cs.CL"], // Default categories
+            maxResults: 100,
+            dateRange: 7,
+          });
+        } catch (error) {
+          console.error("Error fetching new papers:", error);
+          // Continue with existing papers if fetch fails
+        }
+      }
+
+      // Get papers that haven't been voted on for annotation mode
+      let query = db.select()
+        .from(papers)
+        .orderBy(desc(papers.publishedDate));
+
+      if (mode === "annotation") {
+        const votedPaperIds = await db.select()
+          .from(paperVotes)
+          .where(eq(paperVotes.userId, user.id));
+
+        if (votedPaperIds.length > 0) {
+          query = query.where(
+            sql`${papers.id} NOT IN ${votedPaperIds.map(v => v.paperId)}`
+          );
+        }
+      }
+
+      // Get all available papers
+      const allPapers = await query.execute();
+
+      // Apply relevance scoring if needed
+      let relevantPapers = allPapers;
+      if (mode === "relevance" && preferences) {
+        const scoredPapers = await Promise.all(
+          allPapers.map(async (paper) => {
+            try {
+              const relevance = await analyzePaperRelevance(paper.abstract, preferences as string);
+              return {
+                ...paper,
+                relevanceScore: relevance.score,
+                confidence: relevance.confidence,
+              };
+            } catch (error) {
+              console.error(`Error analyzing paper ${paper.id}:`, error);
+              return {
+                ...paper,
+                relevanceScore: 0,
+                confidence: 0,
+              };
+            }
+          })
+        );
+
+        // Sort by relevance score for relevance mode
+        relevantPapers = scoredPapers.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+      }
+
+      // Paginate results
+      const paginatedPapers = relevantPapers.slice(offset, offset + limit);
 
       res.json({
-        papers: sortedPapers,
-        totalPages: Math.ceil(papers.length / limit),
+        papers: paginatedPapers,
+        totalPages: Math.ceil(relevantPapers.length / limit),
       });
     } catch (error) {
-      console.error("Error fetching papers:", error);
-      res.status(500).json({ error: "Failed to fetch papers" });
+      console.error("Error processing papers request:", error);
+      res.status(500).json({ error: "Failed to process request" });
     }
   });
 

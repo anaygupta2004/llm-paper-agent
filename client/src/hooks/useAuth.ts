@@ -12,6 +12,13 @@ export function useAuth() {
     // Listen for auth state changes
     const unsubscribe = auth.onAuthStateChanged(
       (user) => {
+        console.debug("Auth state changed:", { 
+          isAuthenticated: !!user,
+          email: user?.email,
+          emailVerified: user?.emailVerified,
+          timestamp: new Date().toISOString()
+        });
+
         setUser(user);
         setLoading(false);
 
@@ -27,12 +34,19 @@ export function useAuth() {
         console.error("Auth State Error:", error);
         toast({
           title: "Authentication Error",
-          description: "There was a problem with authentication. Please try again.",
+          description: error.message || "There was a problem with authentication. Please try again.",
           variant: "destructive"
         });
         setLoading(false);
       }
     );
+
+    // Log initial auth state for debugging
+    console.debug("Initial auth state:", {
+      currentUser: auth.currentUser?.email,
+      isInitializing: loading,
+      timestamp: new Date().toISOString()
+    });
 
     return () => unsubscribe();
   }, [toast]);

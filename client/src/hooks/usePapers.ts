@@ -2,20 +2,31 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Paper } from "@db/schema";
 import { useAuth } from "@/hooks/useAuth";
 
-export function usePapers(preferences: string, page: number = 1) {
+export function usePapers(preferences: string, page: number = 1, mode: 'annotation' | 'relevance' = 'annotation') {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['/api/papers', preferences, page],
+    queryKey: ['/api/papers', preferences, page, mode],
     queryFn: async () => {
       if (!user) return { papers: [], totalPages: 0 };
 
-      const response = await fetch(`/api/papers?preferences=${encodeURIComponent(preferences)}&page=${page}`, {
+      const params = new URLSearchParams({
+        preferences: preferences,
+        page: page.toString(),
+        mode
+      });
+
+      const response = await fetch(`/api/papers?${params}`, {
         headers: {
           Authorization: `Bearer ${await user.getIdToken()}`
         }
       });
-      if (!response.ok) throw new Error('Failed to fetch papers');
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Failed to fetch papers');
+      }
+
       return response.json();
     },
     enabled: !!user
@@ -38,7 +49,12 @@ export function useVotePaper() {
         },
         body: JSON.stringify({ paperId, vote })
       });
-      if (!response.ok) throw new Error('Failed to vote');
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Failed to vote');
+      }
+
       return response.json();
     },
     onSuccess: () => {
@@ -60,7 +76,12 @@ export function useMetrics() {
           Authorization: `Bearer ${await user.getIdToken()}`
         }
       });
-      if (!response.ok) throw new Error('Failed to fetch metrics');
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Failed to fetch metrics');
+      }
+
       return response.json();
     },
     enabled: !!user

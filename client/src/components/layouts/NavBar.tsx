@@ -17,12 +17,14 @@ export function NavBar() {
 
     setIsSigningIn(true);
     try {
+      console.debug("Starting Google sign-in process...");
       await signInWithGoogle();
       // Success toast will be shown by useAuth hook
     } catch (error: any) {
+      console.error("Sign in error:", error);
       toast({
         title: "Authentication Error",
-        description: error.message,
+        description: error.message || "Failed to sign in. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -38,9 +40,10 @@ export function NavBar() {
         description: "You have been signed out of your account.",
       });
     } catch (error: any) {
+      console.error("Sign out error:", error);
       toast({
         title: "Error",
-        description: "Failed to sign out. Please try again.",
+        description: error.message || "Failed to sign out. Please try again.",
         variant: "destructive",
       });
     }
@@ -93,6 +96,7 @@ export function NavBar() {
             <Button 
               onClick={handleSignIn}
               disabled={isSigningIn}
+              className="min-w-[150px]"
             >
               {isSigningIn ? "Signing in..." : "Sign In with Google"}
             </Button>

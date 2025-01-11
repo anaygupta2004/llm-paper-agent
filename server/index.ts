@@ -5,16 +5,35 @@ import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 
-// Enable CORS for Firebase auth
+// Enable CORS with specific configuration for Firebase
+const whitelist = [
+  'https://accounts.google.com',
+  'https://identitytoolkit.googleapis.com',
+  'http://localhost:5000',
+  'http://localhost:3000'
+];
+
 app.use(cors({
-  origin: true,
-  credentials: true
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    // Check if the origin is in whitelist or if it's a Replit domain
+    if (whitelist.includes(origin) || origin.endsWith('.replit.dev')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Request logging middleware
+// Request logging middleware with detailed error logging
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -44,11 +63,14 @@ app.use((req, res, next) => {
 (async () => {
   const server = registerRoutes(app);
 
-  // Global error handler
+  // Global error handler with detailed logging
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error('Server Error:', err);
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
+
+    // Log the full error stack for debugging
+    console.error('Error stack:', err.stack);
 
     res.status(status).json({ error: message });
   });
@@ -62,5 +84,12 @@ app.use((req, res, next) => {
   const PORT = 5000;
   server.listen(PORT, "0.0.0.0", () => {
     log(`Server running on port ${PORT}`);
+    // Log the current environment and configuration
+    console.debug('Server configuration:', {
+      env: app.get('env'),
+      port: PORT,
+      corsEnabled: true,
+      nodeEnv: process.env.NODE_ENV
+    });
   });
 })();
