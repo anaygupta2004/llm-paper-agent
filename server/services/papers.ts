@@ -2,7 +2,7 @@ import axios from "axios";
 import { parseStringPromise } from "xml2js";
 import { papers, paperVotes, paperRelevanceScores } from "@db/schema";
 import { db } from "@db";
-import { analyzePaperRelevance, generateSearchQuery, calculatePaperSimilarity } from "./openai";
+import { analyzePaperRelevance, generateSearchQuery } from "./openai";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 interface FetchPapersOptions {
@@ -91,14 +91,14 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
             const relevance = await analyzePaperRelevance(paper.abstract, preferences);
             console.log(`\n----- Paper Analysis -----
 Title: ${paper.title}
-Relevance Score: ${relevance.score}
-Confidence: ${relevance.confidence}
+Relevance Score: ${relevance.score}%
+Confidence: ${relevance.confidence}%
 Keywords: ${relevance.keywords?.join(", ")}
-Topic Similarity: ${relevance.topicSimilarity}
-Methodology Similarity: ${relevance.methodologySimilarity}
+Topic Similarity: ${relevance.topicSimilarity}%
+Methodology Similarity: ${relevance.methodologySimilarity}%
 Explanation: ${relevance.explanation}
 Abstract: ${paper.abstract.substring(0, 200)}...
-            `);
+`);
 
             // Higher threshold (70%) for more relevant results
             if (relevance.score >= 70) {

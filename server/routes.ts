@@ -56,6 +56,13 @@ export function registerRoutes(app: Express): Server {
     const offset = (Number(page) - 1) * limit;
 
     try {
+      console.log("\n========== PAPER SEARCH REQUEST ==========");
+      console.log(`Search Parameters:
+        - Preferences: ${preferences}
+        - Page: ${page}
+        - Mode: ${mode}
+      `);
+
       // Get the user's ID
       const [user] = await db.select()
         .from(users)
@@ -71,7 +78,8 @@ export function registerRoutes(app: Express): Server {
         .execute();
 
       if (existingPaperCount[0].count < limit * 2 || preferences) {
-        console.log("Fetching papers with preferences:", preferences);
+        console.log("\n========== FETCHING NEW PAPERS ==========");
+        console.log("Preferences:", preferences);
         await fetchAndStorePapers({
           categories: ["cs.LG", "cs.AI", "cs.CL"],
           maxResults: 100,
@@ -100,16 +108,30 @@ export function registerRoutes(app: Express): Server {
       const allPapers = await query.execute();
       let processedPapers = allPapers;
 
+      console.log("\n========== PROCESSING PAPERS ==========");
+      console.log(`Found ${allPapers.length} papers to process`);
+
       if (mode === "relevance" && preferences) {
-        console.log("Analyzing paper relevance for preferences:", preferences);
+        console.log("\n========== ANALYZING RELEVANCE ==========");
         const scoredPapers = await Promise.all(
           allPapers.map(async (paper) => {
             try {
               const relevance = await analyzePaperRelevance(paper.abstract, preferences as string);
+              console.log(`\n----- Paper Analysis -----
+Title: ${paper.title}
+Score: ${relevance.score}%
+Confidence: ${relevance.confidence}%
+Explanation: ${relevance.explanation}
+Keywords: ${relevance.keywords?.join(", ")}
+Topic Similarity: ${relevance.topicSimilarity}%
+Abstract Preview: ${paper.abstract.substring(0, 150)}...
+----------------------------------------`);
+
               return {
                 ...paper,
                 relevanceScore: relevance.score,
                 confidence: relevance.confidence,
+                explanation: relevance.explanation
               };
             } catch (error) {
               console.error(`Error analyzing paper ${paper.id}:`, error);
@@ -126,16 +148,29 @@ export function registerRoutes(app: Express): Server {
         processedPapers = scoredPapers
           .filter(paper => paper.relevanceScore >= 50)
           .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+
+        console.log("\n========== TOP 20 PAPERS BY RELEVANCE ==========");
+        processedPapers.slice(0, 20).forEach((paper, index) => {
+          console.log(`\n#${index + 1}. ${paper.title}
+Score: ${paper.relevanceScore}%
+Confidence: ${paper.confidence}%
+Explanation: ${paper.explanation}
+----------------------------------------`);
+        });
       }
 
       // Paginate results
       const paginatedPapers = processedPapers.slice(offset, offset + limit);
+
+      console.log(`\n========== SENDING RESPONSE ==========`);
+      console.log(`Returning ${paginatedPapers.length} papers`);
 
       res.json({
         papers: paginatedPapers,
         totalPages: Math.ceil(processedPapers.length / limit),
       });
     } catch (error) {
+      console.error("\n========== ERROR ==========");
       console.error("Error processing papers request:", error);
       res.status(500).json({ 
         error: "Failed to process request", 
