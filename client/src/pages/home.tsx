@@ -40,7 +40,7 @@ export default function Home() {
           <Card className="p-8">
             <h1 className="text-4xl font-bold mb-4">Welcome to Paper Recommender</h1>
             <p className="text-lg text-muted-foreground mb-6">
-              Discover relevant research papers and help improve recommendations through intelligent feedback.
+              Discover relevant research papers with personalized recommendations powered by your feedback.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Feature
@@ -51,12 +51,12 @@ export default function Home() {
               <Feature
                 icon={<BookOpen className="h-8 w-8" />}
                 title="Active Learning"
-                description="Our system learns from your feedback to improve recommendations"
+                description="Our system learns from your feedback to improve your recommendations"
               />
               <Feature
                 icon={<ThumbsUp className="h-8 w-8" />}
-                title="Contribute"
-                description="Help the community by annotating papers and sharing insights"
+                title="Personal Relevance"
+                description="Vote on papers to refine your personalized recommendations"
               />
             </div>
           </Card>
@@ -124,8 +124,8 @@ export default function Home() {
               />
             </div>
 
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="w-full"
               disabled={isSearching}
             >
