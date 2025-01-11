@@ -17,7 +17,8 @@ const corsOptions = {
 
     // Check if origin is allowed
     if (
-      origin.endsWith('.replit.dev') || // Allow all Replit domains
+      origin === 'https://arxiv-agent.replit.app' || // Production domain
+      origin.endsWith('.replit.dev') || // Allow all Replit preview domains
       origin.includes('replit.com') ||   // Allow Replit editor domains
       origin.includes('google.com') ||   // Allow Google auth domains
       (isDevelopment && (
@@ -96,7 +97,13 @@ app.use((req, res, next) => {
       env: app.get('env'),
       port: PORT,
       corsEnabled: true,
-      nodeEnv: process.env.NODE_ENV
+      nodeEnv: process.env.NODE_ENV,
+      allowedOrigins: [
+        'https://arxiv-agent.replit.app',
+        '*.replit.dev',
+        'replit.com',
+        'accounts.google.com'
+      ]
     });
   });
 })();

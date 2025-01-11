@@ -76,4 +76,6 @@ console.debug("Firebase Config:", {
   hasAppId: !!import.meta.env.VITE_FIREBASE_APP_ID,
   currentDomain,
   authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
+  isDevelopment: import.meta.env.DEV,
+  isProduction: import.meta.env.PROD
 });
