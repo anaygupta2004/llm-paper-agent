@@ -24,8 +24,14 @@ export function PaperCard({ paper, mode = "relevance" }: PaperCardProps) {
 
   const handleVote = (newVote: 1 | -1) => {
     if (voteMutation.isPending) return;
-    setVote(newVote);
-    voteMutation.mutate({ paperId: paper.id, vote: newVote });
+    // If clicking the same button again, toggle it off
+    if (vote === newVote) {
+      setVote(null);
+      voteMutation.mutate({ paperId: paper.id, vote: 0 }); // 0 to remove vote
+    } else {
+      setVote(newVote);
+      voteMutation.mutate({ paperId: paper.id, vote: newVote });
+    }
   };
 
   return (

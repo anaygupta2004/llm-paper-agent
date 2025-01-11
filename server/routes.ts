@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { verifyAuthToken } from "./services/firebase";
 import { db } from "@db";
 import { papers, paperVotes, paperRelevanceScores, users } from "@db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { analyzePaperRelevance } from "./services/openai";
 import { fetchAndStorePapers } from "./services/papers";
 import type { UserPreferences, ModelResponse } from "@db/schema";
@@ -74,7 +74,7 @@ export function registerRoutes(app: Express): Server {
           })
         );
 
-        // Sort by relevance and filter out low-relevance papers
+        // Filter and sort papers
         const rankedPapers = scoredPapers
           .filter(paper => paper.relevanceScore >= 50)
           .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
@@ -106,9 +106,9 @@ Abstract: ${paper.abstract.substring(0, 300)}...
       });
     } catch (error) {
       console.error("Error processing request:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to process request",
-        details: error instanceof Error ? error.message : String(error)
+        details: error instanceof Error ? error.message : String(error),
       });
     }
   });
@@ -168,11 +168,26 @@ Abstract: ${paper.abstract.substring(0, 300)}...
         return res.status(404).json({ error: "User not found" });
       }
 
-      await db.insert(paperVotes).values({
-        paperId,
-        userId: user.id,
-        vote: vote === 1 ? 1 : -1,
-      });
+      // If vote is 0, remove the vote
+      if (vote === 0) {
+        await db.delete(paperVotes)
+          .where(and(
+            eq(paperVotes.userId, user.id),
+            eq(paperVotes.paperId, paperId)
+          ));
+      } else {
+        // Otherwise, upsert the vote
+        await db.insert(paperVotes)
+          .values({
+            paperId,
+            userId: user.id,
+            vote: vote === 1 ? 1 : -1,
+          })
+          .onConflictDoUpdate({
+            target: [paperVotes.userId, paperVotes.paperId],
+            set: { vote: vote === 1 ? 1 : -1 }
+          });
+      }
 
       res.json({ success: true });
     } catch (error) {
@@ -192,17 +207,18 @@ Abstract: ${paper.abstract.substring(0, 300)}...
         .from(paperVotes)
         .where(eq(paperVotes.userId, user.id));
 
-      // Get papers with relevance scores
       const votedPaperIds = votes.map(v => v.paperId);
+
+      // Get papers with relevance scores
       const relevanceScores = await db.select()
         .from(paperRelevanceScores)
         .where(eq(paperRelevanceScores.userId, user.id));
 
       // Handle empty voted papers array
-      const votedPapers = votedPaperIds.length > 0 
+      const votedPapers = votedPaperIds.length > 0
         ? await db.select()
             .from(papers)
-            .where(sql`${papers.id} IN (${votedPaperIds.join(",")})`)
+            .where(inArray(papers.id, votedPaperIds))
         : [];
 
       // Combine papers with their relevance scores
@@ -215,8 +231,8 @@ Abstract: ${paper.abstract.substring(0, 300)}...
         totalVotes: votes.length,
         upvotes: votes.filter(v => v.vote === 1).length,
         downvotes: votes.filter(v => v.vote === -1).length,
-        averageRelevanceScore: relevanceScores.length 
-          ? relevanceScores.reduce((acc, curr) => acc + curr.score, 0) / relevanceScores.length 
+        averageRelevanceScore: relevanceScores.length
+          ? relevanceScores.reduce((acc, curr) => acc + curr.score, 0) / relevanceScores.length
           : 0,
         averageConfidence: relevanceScores.length
           ? relevanceScores.reduce((acc, curr) => acc + curr.confidence, 0) / relevanceScores.length
@@ -228,24 +244,6 @@ Abstract: ${paper.abstract.substring(0, 300)}...
     } catch (error) {
       console.error("Error fetching metrics:", error);
       res.status(500).json({ error: "Failed to fetch metrics" });
-    }
-  });
-
-  // Settings route
-  app.post("/api/settings", requireAuth, async (req: Request, res: Response) => {
-    const { preferences, categories } = req.body;
-
-    try {
-      const [user] = await db.select().from(users).where(eq(users.firebaseId, req.user!.uid));
-
-      await db.update(users)
-        .set({ preferences: { preferences, categories } })
-        .where(eq(users.id, user.id));
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error saving settings:", error);
-      res.status(500).json({ error: "Failed to save settings" });
     }
   });
 
