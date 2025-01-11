@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const { user } = useAuth();
+  const [searchInput, setSearchInput] = useState("");
   const [preferences, setPreferences] = useState("");
   const [mode, setMode] = useState<"annotation" | "relevance">("annotation");
   const [page, setPage] = useState(1);
@@ -27,7 +28,7 @@ export default function Home() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (preferences.trim().length < 3) {
+    if (searchInput.trim().length < 3) {
       toast({
         title: "Invalid search",
         description: "Please enter at least 3 characters to search",
@@ -40,6 +41,8 @@ export default function Home() {
     setPage(1);
 
     try {
+      // Update preferences to trigger the search
+      setPreferences(searchInput.trim());
       // Invalidate existing queries to force a fresh fetch
       await queryClient.invalidateQueries({ queryKey: ['/api/papers'] });
       await refetch();
@@ -146,12 +149,12 @@ export default function Home() {
               <Textarea
                 id="preferences"
                 placeholder="Describe your research interests in detail. For example: 'I'm interested in deep learning applications in computer vision, particularly in medical image analysis using transformers.'"
-                value={preferences}
-                onChange={(e) => setPreferences(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="h-32"
-                disabled={isSearching || isLoading}
+                disabled={isSearching}
               />
-              {preferences.trim().length > 0 && preferences.trim().length < 3 && (
+              {searchInput.trim().length > 0 && searchInput.trim().length < 3 && (
                 <p className="text-sm text-destructive">Please enter at least 3 characters</p>
               )}
             </div>
@@ -159,12 +162,12 @@ export default function Home() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isSearching || isLoading || preferences.trim().length < 3}
+              disabled={isSearching || searchInput.trim().length < 3}
             >
-              {isSearching || isLoading ? (
+              {isSearching ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {isSearching ? 'Searching...' : 'Loading...'}
+                  Searching...
                 </span>
               ) : (
                 <>
@@ -189,7 +192,7 @@ export default function Home() {
             <div className="space-y-4">
               <PaperList
                 papers={data.papers}
-                loading={showLoadingState}
+                loading={isSearching}
                 showVoting={mode === "annotation"}
                 mode={mode}
               />
@@ -199,14 +202,14 @@ export default function Home() {
                   <Button
                     variant="outline"
                     onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1 || showLoadingState}
+                    disabled={page === 1 || isSearching}
                   >
                     Previous
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setPage(p => Math.min(data.totalPages, p + 1))}
-                    disabled={page === data.totalPages || showLoadingState}
+                    disabled={page === data.totalPages || isSearching}
                   >
                     Next
                   </Button>

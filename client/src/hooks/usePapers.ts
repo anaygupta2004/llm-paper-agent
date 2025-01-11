@@ -29,7 +29,7 @@ export function usePapers(preferences: string, page: number = 1, mode: 'annotati
 
       return response.json();
     },
-    enabled: !!user,
+    enabled: !!user && preferences.length >= 3,
     // Increase stale time to avoid unnecessary refetches
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
