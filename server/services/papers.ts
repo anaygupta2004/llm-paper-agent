@@ -1,9 +1,9 @@
 import axios from "axios";
 import { parseStringPromise } from "xml2js";
-import { papers } from "@db/schema";
+import { papers, paperVotes, paperRelevanceScores } from "@db/schema";
 import { db } from "@db";
-import { analyzePaperRelevance, generateSearchQuery } from "../services/openai";
-import { eq } from "drizzle-orm";
+import { analyzePaperRelevance, generateSearchQuery, calculatePaperSimilarity } from "./openai";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 interface FetchPapersOptions {
   categories: string[];
@@ -62,7 +62,7 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
               entry.author.map((a: any) => a.name).join(", ") : 
               entry.author.name,
             abstract: entry.summary.replace(/\s+/g, " ").trim(),
-            pdfUrl: `${entry.id.replace("abs", "pdf")}`,
+            pdfUrl: entry.id.replace("abs", "pdf"),
             abstractUrl: entry.id,
             primaryCategory: entry.primary_category ? 
               entry.primary_category.term : 
@@ -76,27 +76,51 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
               const relevance = await analyzePaperRelevance(paper.abstract, preferences);
               console.log(`Relevance score for paper ${paper.arxivId}: ${relevance.score}`);
 
-              // Only store papers with relevance score above threshold
-              if (relevance.score < 50) {
+              // Store papers with relevance score above threshold or high confidence in methodology
+              if (relevance.score >= 50 || 
+                  (relevance.methodologySimilarity && relevance.methodologySimilarity >= 70)) {
+
+                // Check if paper already exists
+                const existing = await db.select()
+                  .from(papers)
+                  .where(eq(papers.arxivId, paper.arxivId))
+                  .limit(1);
+
+                if (!existing.length) {
+                  const [storedPaper] = await db.insert(papers)
+                    .values(paper)
+                    .returning();
+
+                  // Store relevance scores for better recommendations
+                  await db.insert(paperRelevanceScores).values({
+                    paperId: storedPaper.id,
+                    score: relevance.score,
+                    confidence: relevance.confidence,
+                    modelResponse: relevance
+                  });
+
+                  results.push({ ...paper, relevance });
+                  console.log(`Stored new paper: ${paper.arxivId}`);
+                }
+              } else {
                 console.log(`Skipping paper ${paper.arxivId} due to low relevance score`);
-                continue;
               }
             } catch (error) {
               console.error(`Error analyzing paper relevance for ${paper.arxivId}:`, error);
               // Continue with paper if relevance analysis fails
             }
-          }
+          } else {
+            // Without preferences, store all papers
+            const existing = await db.select()
+              .from(papers)
+              .where(eq(papers.arxivId, paper.arxivId))
+              .limit(1);
 
-          // Check if paper already exists
-          const existing = await db.select()
-            .from(papers)
-            .where(eq(papers.arxivId, paper.arxivId))
-            .limit(1);
-
-          if (!existing.length) {
-            await db.insert(papers).values(paper);
-            results.push(paper);
-            console.log(`Stored new paper: ${paper.arxivId}`);
+            if (!existing.length) {
+              await db.insert(papers).values(paper);
+              results.push(paper);
+              console.log(`Stored new paper: ${paper.arxivId}`);
+            }
           }
         } catch (error) {
           console.error(`Failed to process paper:`, error);
@@ -117,12 +141,49 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
 }
 
 export async function getPaperRelevance(paperId: number, preferences: string) {
-  const paper = await db.select().from(papers).where(eq(papers.id, paperId)).limit(1);
+  const [paper] = await db.select()
+    .from(papers)
+    .where(eq(papers.id, paperId))
+    .limit(1);
 
-  if (!paper.length) {
+  if (!paper) {
     throw new Error("Paper not found");
   }
 
-  const relevance = await analyzePaperRelevance(paper[0].abstract, preferences);
+  const relevance = await analyzePaperRelevance(paper.abstract, preferences);
   return relevance;
+}
+
+export async function updateRelevanceScores(userId: number, preferences: string) {
+  // Get all papers for this user
+  const userPapers = await db.select()
+    .from(papers)
+    .innerJoin(paperVotes, eq(papers.id, paperVotes.paperId))
+    .where(eq(paperVotes.userId, userId));
+
+  // Update relevance scores based on preferences and voting history
+  for (const paper of userPapers) {
+    try {
+      const relevance = await analyzePaperRelevance(paper.abstract, preferences);
+
+      await db.insert(paperRelevanceScores)
+        .values({
+          paperId: paper.id,
+          userId,
+          score: relevance.score,
+          confidence: relevance.confidence,
+          modelResponse: relevance
+        })
+        .onConflictDoUpdate({
+          target: [paperRelevanceScores.paperId, paperRelevanceScores.userId],
+          set: {
+            score: relevance.score,
+            confidence: relevance.confidence,
+            modelResponse: relevance
+          }
+        });
+    } catch (error) {
+      console.error(`Error updating relevance score for paper ${paper.id}:`, error);
+    }
+  }
 }

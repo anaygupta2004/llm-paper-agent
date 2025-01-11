@@ -1,7 +1,7 @@
 import { db } from "@db";
 import { papers, paperVotes, paperRelevanceScores, users } from "@db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { analyzePaperRelevance } from "./openai";
+import { analyzePaperRelevance, calculatePaperSimilarity } from "./openai";
 
 interface RecommendationScore {
   paperId: number;
@@ -43,7 +43,7 @@ export async function getRecommendations(userId: string, preferences: string): P
       const ageInDays = (Date.now() - existingScore.createdAt.getTime()) / (1000 * 60 * 60 * 24);
       const adjustedConfidence = adjustConfidence(existingScore.confidence, {
         ageInDays,
-        feedbackConsistency: calculateFeedbackConsistency(userId, paper.primaryCategory)
+        feedbackConsistency: await calculateFeedbackConsistency(userId, paper.primaryCategory)
       });
 
       // Calculate cluster score based on similar users' preferences
@@ -87,10 +87,12 @@ export async function getRecommendations(userId: string, preferences: string): P
   }
 
   // Final ranking combining relevance scores and cluster preferences
-  return recommendations.map(rec => ({
-    ...rec,
-    score: combineScores(rec.score, rec.clusterScore, rec.confidence)
-  }));
+  return recommendations
+    .map(rec => ({
+      ...rec,
+      score: combineScores(rec.score, rec.clusterScore, rec.confidence)
+    }))
+    .sort((a, b) => b.score - a.score);
 }
 
 async function getSimilarUsersVotes(userId: string, preferences: string) {
@@ -103,18 +105,16 @@ async function getSimilarUsersVotes(userId: string, preferences: string) {
     .from(paperVotes)
     .where(sql`${paperVotes.userId} != ${userId}`);
 
-  // Group votes by user
-  const votesByUser = allUserVotes.reduce((acc, vote) => {
-    if (!acc[vote.userId]) acc[vote.userId] = [];
-    acc[vote.userId].push(vote);
-    return acc;
-  }, {} as Record<string, typeof allUserVotes>);
-
-  // Calculate similarity scores
-  const similarityScores = Object.entries(votesByUser).map(([otherUserId, votes]) => {
-    const similarity = calculateUserSimilarity(userVotes, votes);
-    return { userId: otherUserId, similarity };
-  });
+  // Calculate similarity scores with all other users
+  const similarityScores = await Promise.all(
+    Array.from(new Set(allUserVotes.map(v => v.userId))).map(async (otherUserId) => {
+      const similarity = await calculateUserSimilarity(
+        userVotes,
+        allUserVotes.filter(v => v.userId === otherUserId)
+      );
+      return { userId: otherUserId, similarity };
+    })
+  );
 
   // Get top similar users' votes
   const topSimilarUsers = similarityScores
@@ -126,7 +126,7 @@ async function getSimilarUsersVotes(userId: string, preferences: string) {
   );
 }
 
-function calculateUserSimilarity(userVotes: any[], otherVotes: any[]): number {
+async function calculateUserSimilarity(userVotes: any[], otherVotes: any[]): Promise<number> {
   // Find papers both users have voted on
   const commonPapers = userVotes.filter(v1 => 
     otherVotes.some(v2 => v2.paperId === v1.paperId)
@@ -134,12 +134,36 @@ function calculateUserSimilarity(userVotes: any[], otherVotes: any[]): number {
 
   if (commonPapers.length === 0) return 0;
 
-  // Calculate similarity based on voting agreement
-  const agreements = commonPapers.filter(v1 => 
-    otherVotes.find(v2 => v2.paperId === v1.paperId && v2.vote === v1.vote)
-  ).length;
+  // Get paper abstracts for content-based similarity
+  const paperDetails = await Promise.all(
+    commonPapers.map(async v => {
+      const [paper] = await db.select()
+        .from(papers)
+        .where(eq(papers.id, v.paperId))
+        .limit(1);
+      return paper;
+    })
+  );
 
-  return agreements / commonPapers.length;
+  // Calculate both vote agreement and content similarity
+  const voteAgreement = commonPapers.filter(v1 => 
+    otherVotes.find(v2 => v2.paperId === v1.paperId && v2.vote === v1.vote)
+  ).length / commonPapers.length;
+
+  let contentSimilarity = 0;
+  for (let i = 0; i < paperDetails.length - 1; i++) {
+    for (let j = i + 1; j < paperDetails.length; j++) {
+      const similarity = await calculatePaperSimilarity(
+        paperDetails[i].abstract,
+        paperDetails[j].abstract
+      );
+      contentSimilarity += similarity;
+    }
+  }
+  contentSimilarity /= (paperDetails.length * (paperDetails.length - 1) / 2) || 1;
+
+  // Combine vote agreement and content similarity
+  return (voteAgreement * 0.7 + (contentSimilarity / 100) * 0.3);
 }
 
 function calculateClusterScore(paperId: number, similarUsersVotes: any[]): number {
