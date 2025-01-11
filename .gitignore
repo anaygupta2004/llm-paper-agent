@@ -4,3 +4,10 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+.env
+.env.local
+.vercel
+yarn-debug.log*
+yarn-error.log*
+npm-debug.log*
+.next
