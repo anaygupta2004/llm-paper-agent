@@ -24,7 +24,15 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
       maxResults: maxResults,
       sortBy: 'lastUpdatedDate',
       sortOrder: 'descending'
+    }).catch(error => {
+      console.error("ArXiv search error:", error);
+      return [];
     });
+
+    if (!Array.isArray(searchResults)) {
+      console.warn("No results returned from arXiv");
+      return [];
+    }
 
     const dateLimit = new Date();
     dateLimit.setDate(dateLimit.getDate() - dateRange);
@@ -33,18 +41,18 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
     for (const result of searchResults) {
       const published = new Date(result.published);
       if (published >= dateLimit) {
-        const paper = {
-          arxivId: result.id.split("/").pop()!,
-          title: result.title,
-          authors: result.authors.join(", "),
-          abstract: result.summary,
-          pdfUrl: result.links.find(link => link.includes("pdf"))!,
-          abstractUrl: result.id,
-          primaryCategory: result.categories[0],
-          publishedDate: published,
-        };
-
         try {
+          const paper = {
+            arxivId: result.id.split("/").pop()!,
+            title: result.title,
+            authors: result.authors.join(", "),
+            abstract: result.summary,
+            pdfUrl: result.links.find(link => link.includes("pdf"))!,
+            abstractUrl: result.id,
+            primaryCategory: result.categories[0],
+            publishedDate: published,
+          };
+
           const existing = await db.select()
             .from(papers)
             .where(eq(papers.arxivId, paper.arxivId));
@@ -54,7 +62,8 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
             results.push(paper);
           }
         } catch (error) {
-          console.error(`Failed to store paper ${paper.arxivId}:`, error);
+          console.error(`Failed to process paper:`, error);
+          continue;
         }
       }
     }
@@ -62,7 +71,7 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
     return results;
   } catch (error) {
     console.error("Error fetching papers from arXiv:", error);
-    throw new Error("Failed to fetch papers from arXiv");
+    return [];
   }
 }
 
