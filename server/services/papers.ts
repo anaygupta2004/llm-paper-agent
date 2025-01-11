@@ -17,23 +17,25 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
     // Build the category query string
     const categoryQuery = categories.map(cat => `cat:${cat}`).join(" OR ");
 
-    // Use the arxiv package correctly
-    const searchResults = await search({
-      searchQuery: categoryQuery,
-      start: 0,
-      maxResults: maxResults,
-      sortBy: 'lastUpdatedDate',
-      sortOrder: 'descending'
-    }).catch(error => {
-      console.error("ArXiv search error:", error);
-      return [];
+    // Create a promise to handle the search
+    const searchPromise = new Promise((resolve) => {
+      const results: any[] = [];
+      search({
+        searchQuery: categoryQuery,
+        start: 0,
+        maxResults: maxResults,
+        sortBy: 'lastUpdatedDate',
+        sortOrder: 'descending'
+      }, (result) => {
+        if (result) {
+          results.push(result);
+        }
+      }, () => {
+        resolve(results);
+      });
     });
 
-    if (!Array.isArray(searchResults)) {
-      console.warn("No results returned from arXiv");
-      return [];
-    }
-
+    const searchResults = await searchPromise;
     const dateLimit = new Date();
     dateLimit.setDate(dateLimit.getDate() - dateRange);
 
@@ -45,11 +47,13 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
           const paper = {
             arxivId: result.id.split("/").pop()!,
             title: result.title,
-            authors: result.authors.join(", "),
+            authors: Array.isArray(result.authors) ? result.authors.join(", ") : result.authors,
             abstract: result.summary,
-            pdfUrl: result.links.find(link => link.includes("pdf"))!,
+            pdfUrl: Array.isArray(result.links) ? 
+              result.links.find((link: string) => link.includes("pdf")) || result.id + ".pdf" :
+              result.id + ".pdf",
             abstractUrl: result.id,
-            primaryCategory: result.categories[0],
+            primaryCategory: Array.isArray(result.categories) ? result.categories[0] : result.categories,
             publishedDate: published,
           };
 
