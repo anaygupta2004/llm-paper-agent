@@ -75,6 +75,7 @@
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.0",
+    "vercel": "^39.2.6",
     "wouter": "^3.3.5",
     "ws": "^8.18.0",
     "xml2js": "^0.6.2",
