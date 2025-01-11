@@ -24,8 +24,8 @@ export async function fetchWithAuth(
   // Get the token from Firebase Auth if available
   const token = await getAuthToken();
 
-  const headers = {
-    ...options.headers,
+  const headers: Record<string, string> = {
+    ...options.headers as Record<string, string>,
     'Content-Type': 'application/json',
   };
 
