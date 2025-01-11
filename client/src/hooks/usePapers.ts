@@ -1,8 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Paper } from "@db/schema";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Paper } from "@db/schema";
 import { useAuth } from "@/hooks/useAuth";
 
-export function usePapers(preferences: string, page: number = 1, mode: 'annotation' | 'relevance' = 'annotation') {
+export function usePapers(preferences: string | null = null, page: number = 1, mode: 'annotation' | 'relevance' = 'annotation') {
   const { user } = useAuth();
 
   return useQuery({
@@ -11,10 +11,13 @@ export function usePapers(preferences: string, page: number = 1, mode: 'annotati
       if (!user) return { papers: [], totalPages: 0 };
 
       const params = new URLSearchParams({
-        preferences: preferences,
         page: page.toString(),
         mode
       });
+
+      if (preferences) {
+        params.set('preferences', preferences);
+      }
 
       const response = await fetch(`/api/papers?${params}`, {
         headers: {
@@ -23,14 +26,16 @@ export function usePapers(preferences: string, page: number = 1, mode: 'annotati
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Failed to fetch papers');
+        if (response.status >= 500) {
+          throw new Error(`${response.status}: ${response.statusText}`);
+        }
+
+        throw new Error(`${response.status}: ${await response.text()}`);
       }
 
       return response.json();
     },
-    enabled: !!user && preferences.length >= 3,
-    // Increase stale time to avoid unnecessary refetches
+    enabled: !!user,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 }
@@ -61,6 +66,30 @@ export function useVotePaper() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/papers'] });
+    }
+  });
+}
+
+export function useExportAnnotations() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!user) return null;
+
+      const response = await fetch('/api/papers/export', {
+        headers: {
+          Authorization: `Bearer ${await user.getIdToken()}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Failed to export annotations');
+      }
+
+      return response.blob();
     }
   });
 }

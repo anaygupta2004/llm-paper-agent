@@ -1,15 +1,14 @@
 import { useState } from "react";
-import { usePapers } from "@/hooks/usePapers";
+import { usePapers, useExportAnnotations } from "@/hooks/usePapers";
 import { PaperList } from "@/components/paper/PaperList";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, BookOpen, ThumbsUp, AlertCircle, Loader2 } from "lucide-react";
+import { Search, BookOpen, ThumbsUp, AlertCircle, Loader2, Download, Sparkles } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
@@ -17,15 +16,16 @@ import { Progress } from "@/components/ui/progress";
 export default function Home() {
   const { user } = useAuth();
   const [searchInput, setSearchInput] = useState("");
-  const [preferences, setPreferences] = useState("");
+  const [preferences, setPreferences] = useState<string | null>(null);
   const [mode, setMode] = useState<"annotation" | "relevance">("annotation");
   const [page, setPage] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
   const [searchProgress, setSearchProgress] = useState(0);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const exportMutation = useExportAnnotations();
 
-  const { data, isLoading, refetch } = usePapers(preferences, page, mode);
+  const { data, isLoading } = usePapers(preferences, page, mode);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,21 +47,15 @@ export default function Home() {
       // Start progress animation
       let progress = 0;
       const progressInterval = setInterval(() => {
-        progress = Math.min(95, progress + 5); // Never reach 100% until complete
+        progress = Math.min(95, progress + 5);
         setSearchProgress(progress);
       }, 500);
 
-      // Update preferences to trigger the search
       setPreferences(searchInput.trim());
-      // Invalidate existing queries to force a fresh fetch
       await queryClient.invalidateQueries({ queryKey: ['/api/papers'] });
-      await refetch();
 
-      // Complete progress
       clearInterval(progressInterval);
       setSearchProgress(100);
-
-      // Reset progress after animation
       setTimeout(() => setSearchProgress(0), 500);
     } catch (error) {
       console.error('Search error:', error);
@@ -72,6 +66,34 @@ export default function Home() {
       });
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const result = await exportMutation.mutateAsync();
+      if (!result) return;
+
+      // Create and download the file
+      const url = window.URL.createObjectURL(new Blob([JSON.stringify(result)], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'paper-annotations.json';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Export successful",
+        description: "Your annotations have been exported successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Export failed",
+        description: "Failed to export annotations. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -121,7 +143,18 @@ export default function Home() {
         transition={{ duration: 0.5 }}
       >
         <Card className="p-6">
-          <h1 className="text-3xl font-bold mb-6">Research Paper Discovery</h1>
+          <div className="flex justify-between items-start mb-6">
+            <h1 className="text-3xl font-bold">Research Paper Discovery</h1>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={exportMutation.isLoading}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export Annotations
+            </Button>
+          </div>
 
           <Tabs value={mode} onValueChange={(value) => setMode(value as "annotation" | "relevance")} className="mb-6">
             <TabsList className="grid w-full grid-cols-2">
@@ -130,8 +163,8 @@ export default function Home() {
                 Annotation Mode
               </TabsTrigger>
               <TabsTrigger value="relevance" className="flex items-center gap-2">
-                <Search className="h-4 w-4" />
-                Relevance Mode
+                <Sparkles className="h-4 w-4" />
+                AI Recommendations
               </TabsTrigger>
             </TabsList>
 
@@ -149,11 +182,11 @@ export default function Home() {
 
             <TabsContent value="relevance" className="mt-4">
               <div className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg">
-                <Search className="h-5 w-5 text-green-500 mt-1" />
+                <Sparkles className="h-5 w-5 text-green-500 mt-1" />
                 <div>
-                  <h3 className="font-medium mb-1">Relevance Mode</h3>
+                  <h3 className="font-medium mb-1">AI Recommendations</h3>
                   <p className="text-sm text-muted-foreground">
-                    View papers ranked by relevance to your research interests, powered by our advanced recommendation engine.
+                    Get personalized paper recommendations based on your interests and previous votes, powered by our advanced AI algorithm.
                   </p>
                 </div>
               </div>
@@ -218,8 +251,7 @@ export default function Home() {
             <div className="space-y-4">
               <PaperList
                 papers={data.papers}
-                loading={isSearching}
-                showVoting={mode === "annotation"}
+                loading={showLoadingState}
                 mode={mode}
               />
 
@@ -228,14 +260,14 @@ export default function Home() {
                   <Button
                     variant="outline"
                     onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1 || isSearching}
+                    disabled={page === 1 || showLoadingState}
                   >
                     Previous
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setPage(p => Math.min(data.totalPages, p + 1))}
-                    disabled={page === data.totalPages || isSearching}
+                    disabled={page === data.totalPages || showLoadingState}
                   >
                     Next
                   </Button>

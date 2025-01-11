@@ -6,38 +6,7 @@ import { papers, paperVotes, paperRelevanceScores, users } from "@db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { analyzePaperRelevance } from "./services/openai";
 import { fetchAndStorePapers } from "./services/papers";
-
-// Auth middleware
-const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const token = req.headers.authorization?.split("Bearer ")[1];
-    if (!token) {
-      res.status(401).json({ error: "No authentication token provided" });
-      return;
-    }
-
-    const decodedToken = await verifyAuthToken(token);
-    req.user = decodedToken;
-
-    // Check if user exists in our database
-    const [existingUser] = await db.select()
-      .from(users)
-      .where(eq(users.firebaseId, decodedToken.uid));
-
-    if (!existingUser) {
-      // Create new user if they don't exist
-      await db.insert(users).values({
-        firebaseId: decodedToken.uid,
-        email: decodedToken.email!,
-      });
-    }
-
-    next();
-  } catch (error) {
-    console.error("Auth error:", error);
-    res.status(401).json({ error: "Authentication failed" });
-  }
-};
+import type { UserPreferences, ModelResponse } from "@db/schema";
 
 export function registerRoutes(app: Express): Server {
   // Environment variables route for client
@@ -51,7 +20,7 @@ export function registerRoutes(app: Express): Server {
 
   // Papers route with intelligent search and relevance scoring
   app.get("/api/papers", requireAuth, async (req: Request, res: Response) => {
-    const { preferences = "", page = "1", mode = "relevance" } = req.query;
+    const { preferences, page = "1", mode = "annotation" } = req.query;
     const limit = 10;
     const offset = (Number(page) - 1) * limit;
 
@@ -64,7 +33,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Fetch new papers if needed
+      // Fetch new papers if searching
       if (preferences) {
         await fetchAndStorePapers({
           categories: ["cs.LG", "cs.AI", "cs.CL"],
@@ -80,15 +49,18 @@ export function registerRoutes(app: Express): Server {
         .orderBy(desc(papers.publishedDate))
         .execute();
 
-      // Analyze paper relevance
-      if (mode === "relevance" && preferences) {
+      // If searching or in relevance mode, analyze papers
+      if (preferences || mode === "relevance") {
         console.log("\n============== ANALYZING PAPERS ==============");
 
         const scoredPapers = await Promise.all(
           allPapers.map(async (paper) => {
             try {
               console.log(`\nAnalyzing paper: ${paper.title}`);
-              const relevance = await analyzePaperRelevance(paper.abstract, preferences as string);
+              const relevance = await analyzePaperRelevance(
+                paper.abstract,
+                preferences as string || (user.preferences as UserPreferences)?.preferences || ""
+              );
               return {
                 ...paper,
                 relevanceScore: relevance.score,
@@ -107,7 +79,6 @@ export function registerRoutes(app: Express): Server {
           .filter(paper => paper.relevanceScore >= 50)
           .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
 
-        // Log top 20 papers with their analysis
         console.log("\n============== TOP 20 PAPERS ==============");
         rankedPapers.slice(0, 20).forEach((paper, index) => {
           console.log(`
@@ -120,7 +91,6 @@ Abstract: ${paper.abstract.substring(0, 300)}...
 ==============================================`);
         });
 
-        // Return paginated results
         const paginatedPapers = rankedPapers.slice(offset, offset + limit);
         return res.json({
           papers: paginatedPapers,
@@ -128,7 +98,7 @@ Abstract: ${paper.abstract.substring(0, 300)}...
         });
       }
 
-      // If not in relevance mode, return papers without analysis
+      // If not searching, return recent papers
       const paginatedPapers = allPapers.slice(offset, offset + limit);
       res.json({
         papers: paginatedPapers,
@@ -143,6 +113,48 @@ Abstract: ${paper.abstract.substring(0, 300)}...
     }
   });
 
+  // Export annotations route
+  app.get("/api/papers/export", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.firebaseId, req.user!.uid));
+
+      // Get user's votes with paper details
+      const votes = await db.select({
+        paper: papers,
+        vote: paperVotes,
+        relevance: paperRelevanceScores
+      })
+      .from(paperVotes)
+      .where(eq(paperVotes.userId, user.id))
+      .innerJoin(papers, eq(papers.id, paperVotes.paperId))
+      .leftJoin(paperRelevanceScores, and(
+        eq(paperRelevanceScores.paperId, papers.id),
+        eq(paperRelevanceScores.userId, user.id)
+      ));
+
+      // Format data for export
+      const exportData = votes.map(({ paper, vote, relevance }) => ({
+        title: paper.title,
+        abstract: paper.abstract,
+        url: paper.abstractUrl,
+        userVote: vote.vote === 1 ? 'relevant' : 'not relevant',
+        algorithmScore: relevance?.score || null,
+        algorithmConfidence: relevance?.confidence || null,
+        algorithmExplanation: (relevance?.modelResponse as ModelResponse)?.explanation || null,
+        date: paper.publishedDate
+      }));
+
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', 'attachment; filename=paper-annotations.json');
+      res.json(exportData);
+    } catch (error) {
+      console.error("Error exporting annotations:", error);
+      res.status(500).json({ error: "Failed to export annotations" });
+    }
+  });
+
   // Vote route
   app.post("/api/papers/vote", requireAuth, async (req: Request, res: Response) => {
     const { paperId, vote } = req.body;
@@ -151,6 +163,10 @@ Abstract: ${paper.abstract.substring(0, 300)}...
       const [user] = await db.select()
         .from(users)
         .where(eq(users.firebaseId, req.user!.uid));
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
 
       await db.insert(paperVotes).values({
         paperId,
@@ -236,3 +252,35 @@ Abstract: ${paper.abstract.substring(0, 300)}...
   const httpServer = createServer(app);
   return httpServer;
 }
+
+// Auth middleware
+const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const token = req.headers.authorization?.split("Bearer ")[1];
+    if (!token) {
+      res.status(401).json({ error: "No authentication token provided" });
+      return;
+    }
+
+    const decodedToken = await verifyAuthToken(token);
+    req.user = decodedToken;
+
+    // Check if user exists in our database
+    const [existingUser] = await db.select()
+      .from(users)
+      .where(eq(users.firebaseId, decodedToken.uid));
+
+    if (!existingUser) {
+      // Create new user if they don't exist
+      await db.insert(users).values({
+        firebaseId: decodedToken.uid,
+        email: decodedToken.email!,
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error("Auth error:", error);
+    res.status(401).json({ error: "Authentication failed" });
+  }
+};
