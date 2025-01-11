@@ -13,11 +13,10 @@ interface PaperCardProps {
     confidence?: number;
     explanation?: string;
   };
-  showVoting?: boolean;
   mode?: "annotation" | "relevance";
 }
 
-export function PaperCard({ paper, showVoting = true, mode = "relevance" }: PaperCardProps) {
+export function PaperCard({ paper, mode = "relevance" }: PaperCardProps) {
   const voteMutation = useVotePaper();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -90,33 +89,31 @@ export function PaperCard({ paper, showVoting = true, mode = "relevance" }: Pape
         </div>
       </CardContent>
 
-      {showVoting && (
-        <CardFooter className="flex justify-between">
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleVote(1)}
-              disabled={voteMutation.isPending}
-            >
-              <ThumbsUp className="h-4 w-4 mr-1" />
-              Relevant
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleVote(-1)}
-              disabled={voteMutation.isPending}
-            >
-              <ThumbsDown className="h-4 w-4 mr-1" />
-              Not Relevant
-            </Button>
-          </div>
-          <span className="text-sm text-muted-foreground">
-            {new Date(paper.publishedDate).toLocaleDateString()}
-          </span>
-        </CardFooter>
-      )}
+      <CardFooter className="flex justify-between">
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleVote(1)}
+            disabled={voteMutation.isPending}
+          >
+            <ThumbsUp className="h-4 w-4 mr-1" />
+            Relevant
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleVote(-1)}
+            disabled={voteMutation.isPending}
+          >
+            <ThumbsDown className="h-4 w-4 mr-1" />
+            Not Relevant
+          </Button>
+        </div>
+        <span className="text-sm text-muted-foreground">
+          {new Date(paper.publishedDate).toLocaleDateString()}
+        </span>
+      </CardFooter>
     </Card>
   );
 }
