@@ -49,7 +49,7 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  // Papers route
+  // Papers route with intelligent search and relevance scoring
   app.get("/api/papers", requireAuth, async (req: Request, res: Response) => {
     const { preferences = "", page = "1", mode = "relevance" } = req.query;
     const limit = 10;
@@ -65,17 +65,18 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Check if we need to fetch more papers
-      const paperCount = await db.select({ count: sql<number>`count(*)` })
+      // Fetch papers using intelligent search if preferences are provided
+      const existingPaperCount = await db.select({ count: sql<number>`count(*)` })
         .from(papers)
         .execute();
 
-      if (paperCount[0].count < limit * 2) {
-        console.log("Fetching new papers from arXiv...");
+      if (existingPaperCount[0].count < limit * 2 || preferences) {
+        console.log("Fetching papers with preferences:", preferences);
         await fetchAndStorePapers({
           categories: ["cs.LG", "cs.AI", "cs.CL"],
           maxResults: 100,
           dateRange: 7,
+          preferences: preferences as string,
         });
       }
 
@@ -96,12 +97,12 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      // Get papers
+      // Get papers and analyze relevance
       const allPapers = await query.execute();
-
-      // Process papers based on mode
       let processedPapers = allPapers;
+
       if (mode === "relevance" && preferences) {
+        console.log("Analyzing paper relevance for preferences:", preferences);
         const scoredPapers = await Promise.all(
           allPapers.map(async (paper) => {
             try {
@@ -122,10 +123,10 @@ export function registerRoutes(app: Express): Server {
           })
         );
 
-        // Sort by relevance score
-        processedPapers = scoredPapers.sort((a, b) => 
-          (b.relevanceScore || 0) - (a.relevanceScore || 0)
-        );
+        // Sort by relevance score and filter out low-relevance papers
+        processedPapers = scoredPapers
+          .filter(paper => paper.relevanceScore >= 50)
+          .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
       }
 
       // Paginate results
