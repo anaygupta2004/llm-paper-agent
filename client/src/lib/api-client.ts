@@ -20,6 +20,7 @@ export async function fetchWithAuth(
   options: RequestInit = {}
 ) {
   const url = `${API_BASE_URL}${endpoint}`;
+  console.debug('[API] Request:', { url, method: options.method || 'GET' });
 
   // Get the token from Firebase Auth if available
   const token = await getAuthToken();
@@ -33,13 +34,20 @@ export async function fetchWithAuth(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    credentials: 'include',
-    headers,
-  });
+  try {
+    const response = await fetch(url, {
+      ...options,
+      credentials: 'include',
+      headers,
+    });
 
-  return handleResponse(response);
+    const result = await handleResponse(response);
+    console.debug('[API] Response:', { url, status: response.status, ok: response.ok });
+    return result;
+  } catch (error) {
+    console.error('[API] Error:', { url, error });
+    throw error;
+  }
 }
 
 async function getAuthToken(): Promise<string | null> {
@@ -49,7 +57,7 @@ async function getAuthToken(): Promise<string | null> {
     if (!user) return null;
     return user.getIdToken();
   } catch (error) {
-    console.error('Error getting auth token:', error);
+    console.error('[Auth] Error getting token:', error);
     return null;
   }
 }

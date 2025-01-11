@@ -2,14 +2,24 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { PaperList } from "@/components/paper/PaperList";
 import { useEffect } from "react";
-import type { Paper } from "@db/schema";
+
+interface Paper {
+  id: number;
+  title: string;
+  authors: string;
+  abstract: string;
+  pdfUrl: string;
+  abstractUrl: string;
+  primaryCategory: string;
+  publishedDate: Date;
+  arxivId: string;
+  relevanceScore?: number;
+  confidence?: number;
+  explanation?: string;
+}
 
 interface HistoryResponse {
-  papers: (Paper & {
-    relevanceScore?: number;
-    confidence?: number;
-    explanation?: string;
-  })[];
+  papers: Paper[];
   totalPages: number;
 }
 

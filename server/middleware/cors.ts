@@ -18,22 +18,30 @@ export const corsOptions: CorsOptions = {
       // Define allowed domains based on environment
       const allowedDomains = [
         // Production domains
-        'arxiv-agent.vercel.app',       // Vercel production
-        '.vercel.app',                  // All Vercel preview deployments
-        // Development and auth domains
-        'localhost',                    // Local development
-        '127.0.0.1',                   // Local development
-        '.replit.dev',                 // Replit preview domains
-        '.replit.com',                 // Replit editor domains
-        'accounts.google.com',         // Google auth
+        'arxiv-agent.vercel.app',        // Main Vercel domain
+        '.vercel.app',                   // All Vercel preview deployments
+        'arxiv-research.vercel.app',     // Alternative production domain
+        // Development domains
+        'localhost',
+        '127.0.0.1',
+        '.replit.dev',
+        '.replit.com',
+        // Auth domains
+        'accounts.google.com',
       ];
+
+      // In development, be more permissive
+      if (isDevelopment) {
+        callback(null, true);
+        return;
+      }
 
       const isAllowed = allowedDomains.some(domain => 
         hostname === domain || hostname.endsWith(domain)
       );
 
       if (isAllowed) {
-        console.debug('[CORS] Allowed request:', {
+        console.debug('[CORS] Allowed origin:', {
           origin,
           hostname,
           timestamp: new Date().toISOString()
