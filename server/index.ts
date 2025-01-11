@@ -5,29 +5,12 @@ import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 
-// Enable CORS with specific configuration for Firebase
-const whitelist = [
-  'https://accounts.google.com',
-  'https://identitytoolkit.googleapis.com',
-  'http://localhost:5000',
-  'http://localhost:3000'
-];
-
+// Enable CORS with specific configuration for Firebase and development
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-
-    // Check if the origin is in whitelist or if it's a Replit domain
-    if (whitelist.includes(origin) || origin.endsWith('.replit.dev')) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true, // Allow all origins during development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 app.use(express.json());
