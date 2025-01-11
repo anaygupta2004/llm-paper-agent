@@ -7,7 +7,8 @@ export const users = pgTable("users", {
   email: text("email").unique().notNull(),
   preferences: jsonb("preferences").default({
     preferences: "",
-    categories: []
+    categories: [],
+    openaiApiKey: null // Added API key storage in preferences
   }),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -62,6 +63,7 @@ export type NewPaperRelevanceScore = typeof paperRelevanceScores.$inferInsert;
 export interface UserPreferences {
   preferences: string;
   categories: string[];
+  openaiApiKey?: string | null; // Added API key to preferences interface
 }
 
 export interface ModelResponse {

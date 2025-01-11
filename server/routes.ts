@@ -7,8 +7,89 @@ import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { analyzePaperRelevance } from "./services/openai";
 import { fetchAndStorePapers } from "./services/papers";
 import type { UserPreferences, ModelResponse } from "@db/schema";
+import { validateApiKey, updateUserApiKey } from "./services/openai";
 
 export function registerRoutes(app: Express): Server {
+  // Settings endpoints
+  app.get("/api/settings", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.firebaseId, req.user!.uid));
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const userPreferences = (user.preferences as UserPreferences) || {
+        preferences: "",
+        categories: ["cs.LG", "cs.AI", "cs.CL"],
+        openaiApiKey: null
+      };
+
+      // Send back user preferences, masking the API key
+      res.json({
+        preferences: userPreferences.preferences || "",
+        categories: userPreferences.categories || ["cs.LG", "cs.AI", "cs.CL"],
+        openaiApiKey: userPreferences.openaiApiKey ? '********' : '', // Mask the API key
+      });
+    } catch (error) {
+      console.error("Error fetching settings:", error);
+      res.status(500).json({ error: "Failed to fetch settings" });
+    }
+  });
+
+  app.post("/api/settings", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const [user] = await db.select()
+        .from(users)
+        .where(eq(users.firebaseId, req.user!.uid));
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const { preferences, categories, openaiApiKey } = req.body;
+
+      // Get existing preferences
+      const existingPreferences = (user.preferences as UserPreferences) || {
+        preferences: "",
+        categories: ["cs.LG", "cs.AI", "cs.CL"],
+        openaiApiKey: null
+      };
+
+      // If OpenAI API key is provided, validate it
+      if (openaiApiKey) {
+        try {
+          await validateApiKey(openaiApiKey);
+          await updateUserApiKey(user.id, openaiApiKey);
+        } catch (error) {
+          console.error("API key validation error:", error);
+          return res.status(400).json({ 
+            error: error instanceof Error ? error.message : "Invalid OpenAI API key" 
+          });
+        }
+      }
+
+      // Update user preferences
+      await db.update(users)
+        .set({
+          preferences: {
+            ...existingPreferences,
+            preferences: preferences || existingPreferences.preferences,
+            categories: categories || existingPreferences.categories,
+            openaiApiKey: openaiApiKey || existingPreferences.openaiApiKey,
+          }
+        })
+        .where(eq(users.id, user.id));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating settings:", error);
+      res.status(500).json({ error: "Failed to update settings" });
+    }
+  });
+
   // Environment variables route for client
   app.get("/api/config", (_req, res) => {
     res.json({
@@ -102,13 +183,13 @@ export function registerRoutes(app: Express): Server {
         vote: paperVotes,
         relevance: paperRelevanceScores
       })
-      .from(paperVotes)
-      .where(eq(paperVotes.userId, user.id))
-      .innerJoin(papers, eq(papers.id, paperVotes.paperId))
-      .leftJoin(paperRelevanceScores, and(
-        eq(paperRelevanceScores.paperId, papers.id),
-        eq(paperRelevanceScores.userId, user.id)
-      ));
+        .from(paperVotes)
+        .where(eq(paperVotes.userId, user.id))
+        .innerJoin(papers, eq(papers.id, paperVotes.paperId))
+        .leftJoin(paperRelevanceScores, and(
+          eq(paperRelevanceScores.paperId, papers.id),
+          eq(paperRelevanceScores.userId, user.id)
+        ));
 
       const exportData = votes.map(({ paper, vote, relevance }) => ({
         title: paper.title,
