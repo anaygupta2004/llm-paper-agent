@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, BookOpen, ThumbsUp, AlertCircle, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const { user } = useAuth();
@@ -19,11 +20,22 @@ export default function Home() {
   const [page, setPage] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data, isLoading, refetch } = usePapers(preferences, page, mode);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (preferences.trim().length < 3) {
+      toast({
+        title: "Invalid search",
+        description: "Please enter at least 3 characters to search",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsSearching(true);
     setPage(1);
 
@@ -33,6 +45,11 @@ export default function Home() {
       await refetch();
     } catch (error) {
       console.error('Search error:', error);
+      toast({
+        title: "Search failed",
+        description: "Failed to search papers. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setIsSearching(false);
     }
@@ -132,16 +149,19 @@ export default function Home() {
                 value={preferences}
                 onChange={(e) => setPreferences(e.target.value)}
                 className="h-32"
-                disabled={showLoadingState}
+                disabled={isSearching || isLoading}
               />
+              {preferences.trim().length > 0 && preferences.trim().length < 3 && (
+                <p className="text-sm text-destructive">Please enter at least 3 characters</p>
+              )}
             </div>
 
             <Button
               type="submit"
               className="w-full"
-              disabled={showLoadingState}
+              disabled={isSearching || isLoading || preferences.trim().length < 3}
             >
-              {showLoadingState ? (
+              {isSearching || isLoading ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   {isSearching ? 'Searching...' : 'Loading...'}
