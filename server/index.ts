@@ -5,14 +5,38 @@ import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 
-// Enable CORS with specific configuration for Firebase and development
-app.use(cors({
-  origin: true, // Allow all origins during development
+// Configure CORS based on environment
+const isDevelopment = process.env.NODE_ENV !== 'production';
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    // Check if origin is allowed
+    if (
+      origin.endsWith('.replit.dev') || // Allow all Replit domains
+      origin.includes('replit.com') ||   // Allow Replit editor domains
+      origin.includes('google.com') ||   // Allow Google auth domains
+      (isDevelopment && (
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1')
+      ))
+    ) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 200
+};
 
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -58,15 +82,15 @@ app.use((req, res, next) => {
     res.status(status).json({ error: message });
   });
 
-  if (app.get("env") === "development") {
+  if (isDevelopment) {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  const PORT = 5000;
+  const PORT = process.env.PORT || 5000;
   server.listen(PORT, "0.0.0.0", () => {
-    log(`Server running on port ${PORT}`);
+    log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
     // Log the current environment and configuration
     console.debug('Server configuration:', {
       env: app.get('env'),
