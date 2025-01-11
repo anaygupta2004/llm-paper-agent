@@ -1,33 +1,17 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithRedirect, GoogleAuthProvider } from "firebase/auth";
 
-// Fetch Firebase configuration from server
-async function initializeFirebase() {
-  try {
-    const response = await fetch("/api/config");
-    if (!response.ok) {
-      throw new Error("Failed to fetch Firebase configuration");
-    }
+// Initialize Firebase configuration
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.appspot.com`,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
 
-    const config = await response.json();
-
-    const firebaseConfig = {
-      apiKey: config.firebaseApiKey,
-      authDomain: `${config.firebaseProjectId}.firebaseapp.com`,
-      projectId: config.firebaseProjectId,
-      storageBucket: `${config.firebaseProjectId}.appspot.com`,
-      appId: config.firebaseAppId,
-    };
-
-    return initializeApp(firebaseConfig);
-  } catch (error) {
-    console.error("Firebase initialization error:", error);
-    throw error;
-  }
-}
-
-// Initialize Firebase app
-const app = await initializeFirebase();
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
@@ -37,9 +21,17 @@ googleProvider.addScope('https://www.googleapis.com/auth/userinfo.profile');
 
 export async function signInWithGoogle() {
   try {
+    if (!import.meta.env.VITE_FIREBASE_API_KEY || 
+        !import.meta.env.VITE_FIREBASE_PROJECT_ID || 
+        !import.meta.env.VITE_FIREBASE_APP_ID) {
+      throw new Error("Firebase configuration is incomplete. Please check your environment variables.");
+    }
     await signInWithRedirect(auth, googleProvider);
   } catch (error: any) {
     console.error("Google Sign-In Error:", error);
+    if (error.code === 'auth/configuration-not-found') {
+      throw new Error("Firebase authentication is not properly configured. Please ensure your domain is authorized in the Firebase Console.");
+    }
     throw new Error(error.message || "Failed to sign in with Google");
   }
 }
