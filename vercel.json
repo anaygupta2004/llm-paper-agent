@@ -1,13 +1,8 @@
 {
   "version": 2,
+  "buildCommand": "cd client && npm install && npm run build",
+  "outputDirectory": "client/dist",
   "builds": [
-    {
-      "src": "client/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    },
     {
       "src": "api/**/*.ts",
       "use": "@vercel/node"
@@ -19,8 +14,12 @@
       "dest": "/api/$1"
     },
     {
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
       "src": "/(.*)",
-      "dest": "/client/$1"
+      "dest": "/index.html"
     }
   ],
   "env": {
@@ -28,6 +27,8 @@
     "FIREBASE_API_KEY": "@firebase_api_key",
     "FIREBASE_PROJECT_ID": "@firebase_project_id",
     "FIREBASE_APP_ID": "@firebase_app_id",
+    "FIREBASE_PRIVATE_KEY": "@firebase_private_key",
+    "FIREBASE_CLIENT_EMAIL": "@firebase_client_email",
     "OPENAI_API_KEY": "@openai_api_key"
   }
 }
