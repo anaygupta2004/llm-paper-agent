@@ -25,9 +25,7 @@ export function registerRoutes(app: Express): Server {
     const offset = (Number(page) - 1) * limit;
 
     try {
-      const [user] = await db.select()
-        .from(users)
-        .where(eq(users.firebaseId, req.user!.uid));
+      const [user] = await db.select().from(users).where(eq(users.firebaseId, req.user!.uid));
 
       if (!user) {
         return res.status(404).json({ error: "User not found" });
@@ -44,9 +42,7 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Get all papers
-      const allPapers = await db.select()
-        .from(papers)
-        .orderBy(desc(papers.publishedDate));
+      const allPapers = await db.select().from(papers).orderBy(desc(papers.publishedDate));
 
       // If searching or in relevance mode, analyze papers
       if (preferences || mode === "relevance") {
@@ -99,9 +95,7 @@ export function registerRoutes(app: Express): Server {
   // Export annotations route
   app.get("/api/papers/export", requireAuth, async (req: Request, res: Response) => {
     try {
-      const [user] = await db.select()
-        .from(users)
-        .where(eq(users.firebaseId, req.user!.uid));
+      const [user] = await db.select().from(users).where(eq(users.firebaseId, req.user!.uid));
 
       const votes = await db.select({
         paper: papers,
@@ -127,8 +121,6 @@ export function registerRoutes(app: Express): Server {
         date: paper.publishedDate
       }));
 
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Content-Disposition', 'attachment; filename=paper-annotations.json');
       res.json(exportData);
     } catch (error) {
       console.error("Error exporting annotations:", error);
@@ -141,9 +133,7 @@ export function registerRoutes(app: Express): Server {
     const { paperId, vote } = req.body;
 
     try {
-      const [user] = await db.select()
-        .from(users)
-        .where(eq(users.firebaseId, req.user!.uid));
+      const [user] = await db.select().from(users).where(eq(users.firebaseId, req.user!.uid));
 
       if (!user) {
         return res.status(404).json({ error: "User not found" });
@@ -180,15 +170,10 @@ export function registerRoutes(app: Express): Server {
   // Updated metrics route with algorithm performance metrics
   app.get("/api/metrics", requireAuth, async (req: Request, res: Response) => {
     try {
-      const [user] = await db.select()
-        .from(users)
-        .where(eq(users.firebaseId, req.user!.uid));
+      const [user] = await db.select().from(users).where(eq(users.firebaseId, req.user!.uid));
 
       // Get all votes for this user
-      const votes = await db.select()
-        .from(paperVotes)
-        .where(eq(paperVotes.userId, user.id));
-
+      const votes = await db.select().from(paperVotes).where(eq(paperVotes.userId, user.id));
       const votedPaperIds = votes.map(v => v.paperId);
 
       // Get papers with relevance scores

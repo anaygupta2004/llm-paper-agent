@@ -22,151 +22,161 @@ interface CategoryStatistics {
 }
 
 export async function getRecommendations(userId: number, preferences: string): Promise<RecommendationScore[]> {
-  // Get user's voting history for personalization
-  const userVotes = await db.query.paperVotes.findMany({
-    where: eq(paperVotes.userId, userId)
-  });
+  try {
+    // Get user's voting history for personalization
+    const userVotes = await db.query.paperVotes.findMany({
+      where: eq(paperVotes.userId, userId)
+    });
 
-  // Get papers that haven't been voted on
-  const votedPaperIds = userVotes.map(v => v.paperId);
-  const unvotedPapers = await db.query.papers.findMany({
-    where: votedPaperIds.length ? sql`${papers.id} NOT IN ${votedPaperIds}` : undefined
-  });
+    // Get papers that haven't been voted on
+    const votedPaperIds = userVotes.map(v => v.paperId);
+    const unvotedPapers = await db.query.papers.findMany({
+      where: votedPaperIds.length ? sql`${papers.id} NOT IN ${votedPaperIds}` : undefined
+    });
 
-  // Get previous relevance scores for this user
-  const existingScores = await db.query.paperRelevanceScores.findMany({
-    where: eq(paperRelevanceScores.userId, userId)
-  });
+    // Get previous relevance scores for this user
+    const existingScores = await db.query.paperRelevanceScores.findMany({
+      where: eq(paperRelevanceScores.userId, userId)
+    });
 
-  // Get category statistics
-  const categoryStats = await calculateCategoryStatistics(userId);
+    // Get category statistics
+    const categoryStats = await calculateCategoryStatistics(userId);
 
-  // Calculate recommendations
-  const recommendations: RecommendationScore[] = [];
+    // Calculate recommendations
+    const recommendations: RecommendationScore[] = [];
 
-  for (const paper of unvotedPapers) {
-    try {
-      const existingScore = existingScores.find(s => s.paperId === paper.id);
+    for (const paper of unvotedPapers) {
+      try {
+        const existingScore = existingScores.find(s => s.paperId === paper.id);
 
-      if (existingScore) {
-        const explorationScore = calculateExplorationScore({
-          category: paper.primaryCategory,
-          categoryStats,
-          votingHistory: userVotes.length
-        });
+        if (existingScore) {
+          const explorationScore = calculateExplorationScore({
+            category: paper.primaryCategory,
+            categoryStats,
+            votingHistory: userVotes.length
+          });
 
-        const adjustedConfidence = adjustConfidence(existingScore.confidence, {
-          ageInDays: existingScore.createdAt 
-            ? (Date.now() - existingScore.createdAt.getTime()) / (1000 * 60 * 60 * 24)
-            : 0,
-          feedbackConsistency: await calculateFeedbackConsistency(userId, paper.primaryCategory),
-          votingHistory: userVotes.length
-        });
+          const adjustedConfidence = adjustConfidence(existingScore.confidence, {
+            ageInDays: existingScore.createdAt 
+              ? (Date.now() - existingScore.createdAt.getTime()) / (1000 * 60 * 60 * 24)
+              : 0,
+            feedbackConsistency: await calculateFeedbackConsistency(userId, paper.primaryCategory),
+            votingHistory: userVotes.length
+          });
 
-        const categoryScore = calculateCategoryScore(paper.primaryCategory, categoryStats);
+          const categoryScore = calculateCategoryScore(paper.primaryCategory, categoryStats);
 
-        const finalScore = combineScores({
-          relevanceScore: existingScore.score,
-          explorationScore,
-          categoryScore,
-          confidence: adjustedConfidence,
-          votingHistory: userVotes.length
-        });
+          const finalScore = combineScores({
+            relevanceScore: existingScore.score,
+            explorationScore,
+            categoryScore,
+            confidence: adjustedConfidence,
+            votingHistory: userVotes.length
+          });
 
-        recommendations.push({
-          paperId: paper.id,
-          score: existingScore.score,
-          confidence: adjustedConfidence,
-          needsFeedback: shouldRequestFeedback(adjustedConfidence, userVotes.length),
-          explorationScore,
-          categoryScore,
-          finalScore
-        });
-      } else {
-        const relevance = await analyzePaperRelevance(
-          paper.abstract,
-          generateBroadPreferences(preferences, userVotes.length)
-        );
+          recommendations.push({
+            paperId: paper.id,
+            score: existingScore.score,
+            confidence: adjustedConfidence,
+            needsFeedback: shouldRequestFeedback(adjustedConfidence, userVotes.length),
+            explorationScore,
+            categoryScore,
+            finalScore
+          });
+        } else {
+          const relevance = await analyzePaperRelevance(
+            paper.abstract,
+            generateBroadPreferences(preferences, userVotes.length)
+          );
 
-        await db.insert(paperRelevanceScores).values({
-          paperId: paper.id,
-          userId,
-          score: relevance.score,
-          confidence: relevance.confidence,
-          modelResponse: relevance
-        });
+          await db.insert(paperRelevanceScores).values({
+            paperId: paper.id,
+            userId,
+            score: relevance.score,
+            confidence: relevance.confidence,
+            modelResponse: relevance
+          });
 
-        const explorationScore = calculateExplorationScore({
-          category: paper.primaryCategory,
-          categoryStats,
-          votingHistory: userVotes.length
-        });
+          const explorationScore = calculateExplorationScore({
+            category: paper.primaryCategory,
+            categoryStats,
+            votingHistory: userVotes.length
+          });
 
-        const categoryScore = calculateCategoryScore(paper.primaryCategory, categoryStats);
+          const categoryScore = calculateCategoryScore(paper.primaryCategory, categoryStats);
 
-        const finalScore = combineScores({
-          relevanceScore: relevance.score,
-          explorationScore,
-          categoryScore,
-          confidence: relevance.confidence,
-          votingHistory: userVotes.length
-        });
+          const finalScore = combineScores({
+            relevanceScore: relevance.score,
+            explorationScore,
+            categoryScore,
+            confidence: relevance.confidence,
+            votingHistory: userVotes.length
+          });
 
-        recommendations.push({
-          paperId: paper.id,
-          score: relevance.score,
-          confidence: relevance.confidence,
-          needsFeedback: true,
-          explorationScore,
-          categoryScore,
-          finalScore
-        });
+          recommendations.push({
+            paperId: paper.id,
+            score: relevance.score,
+            confidence: relevance.confidence,
+            needsFeedback: true,
+            explorationScore,
+            categoryScore,
+            finalScore
+          });
+        }
+      } catch (error) {
+        console.error(`Error analyzing paper ${paper.id}:`, error);
       }
-    } catch (error) {
-      console.error(`Error analyzing paper ${paper.id}:`, error);
     }
-  }
 
-  return recommendations.sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0));
+    return recommendations.sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0));
+  } catch (error) {
+    console.error("Error getting recommendations:", error);
+    return [];
+  }
 }
 
 async function calculateCategoryStatistics(userId: number): Promise<CategoryStatistics> {
-  const votes = await db.query.paperVotes.findMany({
-    where: eq(paperVotes.userId, userId),
-    with: {
-      paper: true
-    }
-  });
+  try {
+    const votes = await db.query.paperVotes.findMany({
+      where: eq(paperVotes.userId, userId),
+      with: {
+        paper: true
+      }
+    });
 
-  const stats: CategoryStatistics = {};
+    const stats: CategoryStatistics = {};
 
-  votes.forEach(({ vote, paper }) => {
-    if (!paper) return;
+    votes.forEach(({ vote, paper }) => {
+      if (!paper) return;
 
-    if (!stats[paper.primaryCategory]) {
-      stats[paper.primaryCategory] = {
-        totalVotes: 0,
-        positiveVotes: 0,
-        uncertainty: 1
-      };
-    }
+      if (!stats[paper.primaryCategory]) {
+        stats[paper.primaryCategory] = {
+          totalVotes: 0,
+          positiveVotes: 0,
+          uncertainty: 1
+        };
+      }
 
-    stats[paper.primaryCategory].totalVotes++;
-    if (vote === 1) {
-      stats[paper.primaryCategory].positiveVotes++;
-    }
-  });
+      stats[paper.primaryCategory].totalVotes++;
+      if (vote === 1) {
+        stats[paper.primaryCategory].positiveVotes++;
+      }
+    });
 
-  Object.keys(stats).forEach(category => {
-    const { totalVotes, positiveVotes } = stats[category];
-    if (totalVotes > 0) {
-      const alpha = positiveVotes + 1;
-      const beta = totalVotes - positiveVotes + 1;
-      stats[category].uncertainty = Math.sqrt(alpha * beta) / ((alpha + beta) * (alpha + beta + 1));
-    }
-  });
+    Object.keys(stats).forEach(category => {
+      const { totalVotes, positiveVotes } = stats[category];
+      if (totalVotes > 0) {
+        const alpha = positiveVotes + 1;
+        const beta = totalVotes - positiveVotes + 1;
+        stats[category].uncertainty = Math.sqrt(alpha * beta) / ((alpha + beta) * (alpha + beta + 1));
+      }
+    });
 
-  return stats;
+    return stats;
+  } catch (error) {
+    console.error("Error calculating category statistics:", error);
+    return {};
+  }
 }
 
 function calculateExplorationScore({
@@ -247,192 +257,71 @@ function adjustConfidence(
 }
 
 async function calculateFeedbackConsistency(userId: number, category: string): Promise<number> {
-  const relatedPapers = await db.query.papers.findMany({
-    where: eq(papers.primaryCategory, category)
-  });
+  try {
+    const relatedPapers = await db.query.papers.findMany({
+      where: eq(papers.primaryCategory, category)
+    });
 
-  const paperIds = relatedPapers.map(p => p.id);
+    const paperIds = relatedPapers.map(p => p.id);
 
-  const votes = await db.query.paperVotes.findMany({
-    where: and(
-      eq(paperVotes.userId, userId),
-      inArray(paperVotes.paperId, paperIds)
-    )
-  });
+    const votes = await db.query.paperVotes.findMany({
+      where: and(
+        eq(paperVotes.userId, userId),
+        inArray(paperVotes.paperId, paperIds)
+      )
+    });
 
-  if (votes.length < 2) return 0.5;
+    if (votes.length < 2) return 0.5;
 
-  const upvotes = votes.filter(v => v.vote === 1).length;
-  const downvotes = votes.filter(v => v.vote === -1).length;
+    const upvotes = votes.filter(v => v.vote === 1).length;
+    const downvotes = votes.filter(v => v.vote === -1).length;
 
-  return Math.abs(upvotes - downvotes) / votes.length;
+    return Math.abs(upvotes - downvotes) / votes.length;
+  } catch (error) {
+    console.error("Error calculating feedback consistency:", error);
+    return 0.5;
+  }
 }
 
 export async function updateRecommendations(userId: number, paperId: number, vote: number) {
-  const [currentScore] = await db.select()
-    .from(paperRelevanceScores)
-    .where(and(
-      eq(paperRelevanceScores.userId, userId),
-      eq(paperRelevanceScores.paperId, paperId)
-    ));
+  try {
+    const [currentScore] = await db.select()
+      .from(paperRelevanceScores)
+      .where(and(
+        eq(paperRelevanceScores.userId, userId),
+        eq(paperRelevanceScores.paperId, paperId)
+      ));
 
-  if (!currentScore) return;
+    if (!currentScore) return;
 
-  const categoryStats = await calculateCategoryStatistics(userId);
-  const paper = await db.query.papers.findFirst({
-    where: eq(papers.id, paperId)
-  });
+    const categoryStats = await calculateCategoryStatistics(userId);
+    const paper = await db.query.papers.findFirst({
+      where: eq(papers.id, paperId)
+    });
 
-  if (!paper) return;
+    if (!paper) return;
 
-  const learningRate = 0.3 * (categoryStats[paper.primaryCategory]?.uncertainty || 1);
-  const voteScore = vote === 1 ? 100 : 0;
-  const newScore = Math.round(currentScore.score * (1 - learningRate) + voteScore * learningRate);
+    const learningRate = 0.3 * (categoryStats[paper.primaryCategory]?.uncertainty || 1);
+    const voteScore = vote === 1 ? 100 : 0;
+    const newScore = Math.round(currentScore.score * (1 - learningRate) + voteScore * learningRate);
 
-  const categoryConfidence = categoryStats[paper.primaryCategory]?.totalVotes || 0;
-  const confidenceBoost = Math.min(20, categoryConfidence * 2);
-  const newConfidence = Math.min(100, currentScore.confidence + confidenceBoost);
+    const categoryConfidence = categoryStats[paper.primaryCategory]?.totalVotes || 0;
+    const confidenceBoost = Math.min(20, categoryConfidence * 2);
+    const newConfidence = Math.min(100, currentScore.confidence + confidenceBoost);
 
-  await db.update(paperRelevanceScores)
-    .set({
-      score: newScore,
-      confidence: newConfidence,
-      modelResponse: {
-        ...currentScore.modelResponse,
+    await db.update(paperRelevanceScores)
+      .set({
         score: newScore,
         confidence: newConfidence,
-        explanation: `Score adjusted based on user feedback`
-      }
-    })
-    .where(eq(paperRelevanceScores.id, currentScore.id));
-}
-function calculateClusterScore(paperId: number, similarUsersVotes: any[]): number {
-  const relevantVotes = similarUsersVotes.filter(v => v.paperId === paperId);
-  if (!relevantVotes.length) return 0.5; // Neutral score if no similar users voted
-
-  const positiveVotes = relevantVotes.filter(v => v.vote === 1).length;
-  return positiveVotes / relevantVotes.length;
-}
-
-async function getSimilarUsersVotes(userId: string, preferences: string) {
-  // Find users with similar voting patterns
-  const userVotes = await db.select()
-    .from(paperVotes)
-    .where(eq(paperVotes.userId, userId));
-
-  const allUserVotes = await db.select()
-    .from(paperVotes)
-    .where(sql`${paperVotes.userId} != ${userId}`);
-
-  // Calculate similarity scores with all other users
-  const similarityScores = await Promise.all(
-    Array.from(new Set(allUserVotes.map(v => v.userId))).map(async (otherUserId) => {
-      const similarity = await calculateUserSimilarity(
-        userVotes,
-        allUserVotes.filter(v => v.userId === otherUserId)
-      );
-      return { userId: otherUserId, similarity };
-    })
-  );
-
-  // Get top similar users' votes
-  const topSimilarUsers = similarityScores
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, 5);
-
-  return allUserVotes.filter(vote =>
-    topSimilarUsers.some(user => user.userId === vote.userId)
-  );
-}
-
-async function calculateUserSimilarity(userVotes: any[], otherVotes: any[]): Promise<number> {
-  // Find papers both users have voted on
-  const commonPapers = userVotes.filter(v1 =>
-    otherVotes.some(v2 => v2.paperId === v1.paperId)
-  );
-
-  if (commonPapers.length === 0) return 0;
-
-  // Get paper abstracts for content-based similarity
-  const paperDetails = await Promise.all(
-    commonPapers.map(async v => {
-      const [paper] = await db.select()
-        .from(papers)
-        .where(eq(papers.id, v.paperId))
-        .limit(1);
-      return paper;
-    })
-  );
-
-  // Calculate both vote agreement and content similarity
-  const voteAgreement = commonPapers.filter(v1 =>
-    otherVotes.find(v2 => v2.paperId === v1.paperId && v2.vote === v1.vote)
-  ).length / commonPapers.length;
-
-  let contentSimilarity = 0;
-  for (let i = 0; i < paperDetails.length - 1; i++) {
-    for (let j = i + 1; j < paperDetails.length; j++) {
-      const similarity = await calculatePaperSimilarity(
-        paperDetails[i].abstract,
-        paperDetails[j].abstract
-      );
-      contentSimilarity += similarity;
-    }
+        modelResponse: {
+          ...currentScore.modelResponse,
+          score: newScore,
+          confidence: newConfidence,
+          explanation: `Score adjusted based on user feedback`
+        }
+      })
+      .where(eq(paperRelevanceScores.id, currentScore.id));
+  } catch (error) {
+    console.error("Error updating recommendations:", error);
   }
-  contentSimilarity /= (paperDetails.length * (paperDetails.length - 1) / 2) || 1;
-
-  // Combine vote agreement and content similarity
-  return (voteAgreement * 0.7 + (contentSimilarity / 100) * 0.3);
-}
-
-function adjustConfidence(
-  baseConfidence: number,
-  factors: { ageInDays: number; feedbackConsistency: number }
-): number {
-  const timeDecay = Math.exp(-0.1 * factors.ageInDays);
-  const consistencyBoost = factors.feedbackConsistency * 0.2;
-
-  return Math.min(100, Math.max(0,
-    baseConfidence * timeDecay + consistencyBoost * 100
-  ));
-}
-
-async function calculateFeedbackConsistency(userId: string, category: string): Promise<number> {
-  // Get all votes from this user in the same category
-  const relatedPapers = await db.select()
-    .from(papers)
-    .where(eq(papers.primaryCategory, category));
-
-  const paperIds = relatedPapers.map(p => p.id);
-
-  const votes = await db.select()
-    .from(paperVotes)
-    .where(and(
-      eq(paperVotes.userId, userId),
-      sql`${paperVotes.paperId} IN ${paperIds}`
-    ));
-
-  if (votes.length < 2) return 0.5; // Not enough data
-
-  // Calculate consistency based on voting patterns
-  const upvotes = votes.filter(v => v.vote === 1).length;
-  const downvotes = votes.filter(v => v.vote === -1).length;
-
-  // Higher score if votes are consistently positive or negative
-  const consistency = Math.abs(upvotes - downvotes) / votes.length;
-  return consistency;
-}
-
-function combineScores(
-  relevanceScore: number,
-  clusterScore: number | undefined,
-  confidence: number
-): number {
-  const relevanceWeight = confidence / 100;
-  const clusterWeight = 1 - relevanceWeight;
-
-  return (
-    relevanceScore * relevanceWeight +
-    (clusterScore ?? 0.5) * 100 * clusterWeight
-  );
 }
