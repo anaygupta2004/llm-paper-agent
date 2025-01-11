@@ -56,14 +56,6 @@ export function registerRoutes(app: Express): Server {
     const offset = (Number(page) - 1) * limit;
 
     try {
-      console.log("\n========== PAPER SEARCH REQUEST ==========");
-      console.log(`Search Parameters:
-        - Preferences: ${preferences}
-        - Page: ${page}
-        - Mode: ${mode}
-      `);
-
-      // Get the user's ID
       const [user] = await db.select()
         .from(users)
         .where(eq(users.firebaseId, req.user!.uid));
@@ -72,14 +64,8 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Fetch papers using intelligent search if preferences are provided
-      const existingPaperCount = await db.select({ count: sql<number>`count(*)` })
-        .from(papers)
-        .execute();
-
-      if (existingPaperCount[0].count < limit * 2 || preferences) {
-        console.log("\n========== FETCHING NEW PAPERS ==========");
-        console.log("Preferences:", preferences);
+      // Fetch new papers if needed
+      if (preferences) {
         await fetchAndStorePapers({
           categories: ["cs.LG", "cs.AI", "cs.CL"],
           maxResults: 100,
@@ -88,45 +74,18 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      // Base query for papers
-      let query = db.select()
+      // Get all papers
+      const allPapers = await db.select()
         .from(papers)
-        .orderBy(desc(papers.publishedDate));
+        .orderBy(desc(papers.publishedDate))
+        .execute();
 
-      // Modify query based on mode
-      if (mode === "annotation") {
-        const votedPapers = await db.select()
-          .from(paperVotes)
-          .where(eq(paperVotes.userId, user.id));
-
-        if (votedPapers.length > 0) {
-          query = query.where(sql`${papers.id} NOT IN (${votedPapers.map(v => v.paperId).join(',')})`);
-        }
-      }
-
-      // Get papers and analyze relevance
-      const allPapers = await query.execute();
-      let processedPapers = allPapers;
-
-      console.log("\n========== PROCESSING PAPERS ==========");
-      console.log(`Found ${allPapers.length} papers to process`);
-
+      // Analyze paper relevance
       if (mode === "relevance" && preferences) {
-        console.log("\n========== ANALYZING RELEVANCE ==========");
         const scoredPapers = await Promise.all(
           allPapers.map(async (paper) => {
             try {
               const relevance = await analyzePaperRelevance(paper.abstract, preferences as string);
-              console.log(`\n----- Paper Analysis -----
-Title: ${paper.title}
-Score: ${relevance.score}%
-Confidence: ${relevance.confidence}%
-Explanation: ${relevance.explanation}
-Keywords: ${relevance.keywords?.join(", ")}
-Topic Similarity: ${relevance.topicSimilarity}%
-Abstract Preview: ${paper.abstract.substring(0, 150)}...
-----------------------------------------`);
-
               return {
                 ...paper,
                 relevanceScore: relevance.score,
@@ -135,45 +94,47 @@ Abstract Preview: ${paper.abstract.substring(0, 150)}...
               };
             } catch (error) {
               console.error(`Error analyzing paper ${paper.id}:`, error);
-              return {
-                ...paper,
-                relevanceScore: 0,
-                confidence: 0,
-              };
+              return { ...paper, relevanceScore: 0, confidence: 0 };
             }
           })
         );
 
-        // Sort by relevance score and filter out low-relevance papers
-        processedPapers = scoredPapers
+        // Sort by relevance and filter out low-relevance papers
+        const rankedPapers = scoredPapers
           .filter(paper => paper.relevanceScore >= 50)
           .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
 
-        console.log("\n========== TOP 20 PAPERS BY RELEVANCE ==========");
-        processedPapers.slice(0, 20).forEach((paper, index) => {
-          console.log(`\n#${index + 1}. ${paper.title}
-Score: ${paper.relevanceScore}%
+        // Log top 20 papers with their analysis
+        console.log("\n=================== TOP 20 PAPERS ANALYSIS ===================");
+        rankedPapers.slice(0, 20).forEach((paper, index) => {
+          console.log(`
+=== Paper #${index + 1} ===
+Title: ${paper.title}
+Abstract: ${paper.abstract.substring(0, 300)}...
+Relevance Score: ${paper.relevanceScore}%
 Confidence: ${paper.confidence}%
 Explanation: ${paper.explanation}
-----------------------------------------`);
+===========================================`);
+        });
+
+        // Return paginated results
+        const paginatedPapers = rankedPapers.slice(offset, offset + limit);
+        return res.json({
+          papers: paginatedPapers,
+          totalPages: Math.ceil(rankedPapers.length / limit),
         });
       }
 
-      // Paginate results
-      const paginatedPapers = processedPapers.slice(offset, offset + limit);
-
-      console.log(`\n========== SENDING RESPONSE ==========`);
-      console.log(`Returning ${paginatedPapers.length} papers`);
-
+      // If not in relevance mode, return papers without analysis
+      const paginatedPapers = allPapers.slice(offset, offset + limit);
       res.json({
         papers: paginatedPapers,
-        totalPages: Math.ceil(processedPapers.length / limit),
+        totalPages: Math.ceil(allPapers.length / limit),
       });
     } catch (error) {
-      console.error("\n========== ERROR ==========");
-      console.error("Error processing papers request:", error);
+      console.error("Error processing request:", error);
       res.status(500).json({ 
-        error: "Failed to process request", 
+        error: "Failed to process request",
         details: error instanceof Error ? error.message : String(error)
       });
     }
