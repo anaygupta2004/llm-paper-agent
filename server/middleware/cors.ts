@@ -15,32 +15,16 @@ export const corsOptions: CorsOptions = {
       const url = new URL(origin);
       const hostname = url.hostname;
 
-      // Define allowed domains based on environment
-      const allowedDomains = [
-        // Production domains
-        'arxiv-agent.vercel.app',        // Main Vercel domain
-        '.vercel.app',                   // All Vercel preview deployments
-        'arxiv-research.vercel.app',     // Alternative production domain
-        // Development domains
-        'localhost',
-        '127.0.0.1',
-        '.replit.dev',
-        '.replit.com',
-        // Auth domains
-        'accounts.google.com',
-      ];
-
       // In development, be more permissive
       if (isDevelopment) {
         callback(null, true);
         return;
       }
 
-      const isAllowed = allowedDomains.some(domain => 
-        hostname === domain || hostname.endsWith(domain)
-      );
-
-      if (isAllowed) {
+      // In production, only allow specific domains
+      if (hostname.endsWith('.vercel.app') || 
+          hostname === 'localhost' || 
+          hostname === '127.0.0.1') {
         console.debug('[CORS] Allowed origin:', {
           origin,
           hostname,
@@ -53,8 +37,6 @@ export const corsOptions: CorsOptions = {
       console.warn('[CORS] Blocked request:', {
         origin,
         hostname,
-        allowedDomains,
-        isDevelopment,
         timestamp: new Date().toISOString()
       });
 
@@ -75,12 +57,9 @@ export const corsOptions: CorsOptions = {
     'Authorization',
     'X-Requested-With',
     'Accept',
-    'Origin',
-    'X-Auth-Token'
+    'Origin'
   ],
-  exposedHeaders: ['X-Auth-Token'],
-  maxAge: 86400, // 24 hours
-  optionsSuccessStatus: 200
+  maxAge: 86400 // 24 hours
 };
 
 // Export CORS middleware

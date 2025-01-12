@@ -1,13 +1,13 @@
 {
   "version": 2,
-  "buildCommand": "npm install && cd client && npm install && npm run build",
-  "outputDirectory": "client/dist",
-  "builds": [
-    {
-      "src": "api/**/*.ts",
-      "use": "@vercel/node"
+  "buildCommand": "npm install && npm run build",
+  "outputDirectory": "dist/public",
+  "functions": {
+    "api/**/*.ts": {
+      "memory": 1024,
+      "maxDuration": 10
     }
-  ],
+  },
   "routes": [
     {
       "src": "/api/(.*)",
@@ -40,7 +40,7 @@
   ],
   "env": {
     "DATABASE_URL": "@database_url",
-    "FIREBASE_API_KEY": "@firebase_api_key",
+    "FIREBASE_API_KEY": "@firebase_api_key", 
     "FIREBASE_PROJECT_ID": "@firebase_project_id",
     "FIREBASE_APP_ID": "@firebase_app_id",
     "FIREBASE_PRIVATE_KEY": "@firebase_private_key",

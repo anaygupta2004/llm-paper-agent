@@ -1,6 +1,6 @@
-const API_BASE_URL = import.meta.env.PROD
-  ? 'https://arxiv-agent.vercel.app/api'
-  : '/api';
+const API_BASE_URL = import.meta.env.DEV
+  ? '/api'  // Development: proxy through Vite
+  : `${window.location.origin}/api`;  // Production: use current domain
 
 async function handleResponse(response: Response) {
   if (!response.ok) {
@@ -20,7 +20,11 @@ export async function fetchWithAuth(
   options: RequestInit = {}
 ) {
   const url = `${API_BASE_URL}${endpoint}`;
-  console.debug('[API] Request:', { url, method: options.method || 'GET' });
+  console.debug('[API] Request:', { 
+    url, 
+    method: options.method || 'GET',
+    env: import.meta.env.MODE
+  });
 
   // Get the token from Firebase Auth if available
   const token = await getAuthToken();
@@ -42,7 +46,11 @@ export async function fetchWithAuth(
     });
 
     const result = await handleResponse(response);
-    console.debug('[API] Response:', { url, status: response.status, ok: response.ok });
+    console.debug('[API] Response:', { 
+      url, 
+      status: response.status, 
+      ok: response.ok 
+    });
     return result;
   } catch (error) {
     console.error('[API] Error:', { url, error });
