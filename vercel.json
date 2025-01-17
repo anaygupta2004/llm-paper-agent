@@ -39,7 +39,6 @@
     }
   ],
   "env": {
-    "DATABASE_URL": "@database_url",
     "FIREBASE_API_KEY": "@firebase_api_key", 
     "FIREBASE_PROJECT_ID": "@firebase_project_id",
     "FIREBASE_APP_ID": "@firebase_app_id",

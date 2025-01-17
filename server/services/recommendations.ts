@@ -1,10 +1,8 @@
-import { db } from "@db";
-import { papers, paperVotes, paperRelevanceScores, users } from "@db/schema";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { analyzePaperRelevance, calculatePaperSimilarity } from "./openai";
+import { getDatabase, type Database } from "firebase-admin/database";
+import { analyzePaperRelevance } from "./openai";
 
 interface RecommendationScore {
-  paperId: number;
+  paperId: string;
   score: number;
   confidence: number;
   needsFeedback: boolean;
@@ -21,23 +19,29 @@ interface CategoryStatistics {
   };
 }
 
-export async function getRecommendations(userId: number, preferences: string): Promise<RecommendationScore[]> {
+export async function getRecommendations(userId: string, preferences: string): Promise<RecommendationScore[]> {
   try {
+    const db = getDatabase();
+
     // Get user's voting history for personalization
-    const userVotes = await db.query.paperVotes.findMany({
-      where: eq(paperVotes.userId, userId)
-    });
+    const votesRef = db.ref(`votes/${userId}`);
+    const votesSnapshot = await votesRef.get();
+    const userVotes = votesSnapshot.val() || {};
+
+    // Get all papers
+    const papersRef = db.ref('papers');
+    const papersSnapshot = await papersRef.get();
+    const papers = papersSnapshot.val() || {};
 
     // Get papers that haven't been voted on
-    const votedPaperIds = userVotes.map(v => v.paperId);
-    const unvotedPapers = await db.query.papers.findMany({
-      where: votedPaperIds.length ? sql`${papers.id} NOT IN ${votedPaperIds}` : undefined
-    });
+    const unvotedPapers = Object.entries(papers)
+      .filter(([paperId]) => !userVotes[paperId])
+      .map(([_, paper]) => paper);
 
     // Get previous relevance scores for this user
-    const existingScores = await db.query.paperRelevanceScores.findMany({
-      where: eq(paperRelevanceScores.userId, userId)
-    });
+    const scoresRef = db.ref(`paperRelevanceScores/${userId}`);
+    const scoresSnapshot = await scoresRef.get();
+    const existingScores = scoresSnapshot.val() || {};
 
     // Get category statistics
     const categoryStats = await calculateCategoryStatistics(userId);
@@ -47,21 +51,21 @@ export async function getRecommendations(userId: number, preferences: string): P
 
     for (const paper of unvotedPapers) {
       try {
-        const existingScore = existingScores.find(s => s.paperId === paper.id);
+        const existingScore = existingScores[paper.arxivId];
 
         if (existingScore) {
           const explorationScore = calculateExplorationScore({
             category: paper.primaryCategory,
             categoryStats,
-            votingHistory: userVotes.length
+            votingHistory: Object.keys(userVotes).length
           });
 
           const adjustedConfidence = adjustConfidence(existingScore.confidence, {
             ageInDays: existingScore.createdAt 
-              ? (Date.now() - existingScore.createdAt.getTime()) / (1000 * 60 * 60 * 24)
+              ? (Date.now() - new Date(existingScore.createdAt).getTime()) / (1000 * 60 * 60 * 24)
               : 0,
             feedbackConsistency: await calculateFeedbackConsistency(userId, paper.primaryCategory),
-            votingHistory: userVotes.length
+            votingHistory: Object.keys(userVotes).length
           });
 
           const categoryScore = calculateCategoryScore(paper.primaryCategory, categoryStats);
@@ -71,14 +75,14 @@ export async function getRecommendations(userId: number, preferences: string): P
             explorationScore,
             categoryScore,
             confidence: adjustedConfidence,
-            votingHistory: userVotes.length
+            votingHistory: Object.keys(userVotes).length
           });
 
           recommendations.push({
-            paperId: paper.id,
+            paperId: paper.arxivId,
             score: existingScore.score,
             confidence: adjustedConfidence,
-            needsFeedback: shouldRequestFeedback(adjustedConfidence, userVotes.length),
+            needsFeedback: shouldRequestFeedback(adjustedConfidence, Object.keys(userVotes).length),
             explorationScore,
             categoryScore,
             finalScore
@@ -86,21 +90,20 @@ export async function getRecommendations(userId: number, preferences: string): P
         } else {
           const relevance = await analyzePaperRelevance(
             paper.abstract,
-            generateBroadPreferences(preferences, userVotes.length)
+            generateBroadPreferences(preferences, Object.keys(userVotes).length)
           );
 
-          await db.insert(paperRelevanceScores).values({
-            paperId: paper.id,
-            userId,
+          await db.ref(`paperRelevanceScores/${userId}/${paper.arxivId}`).set({
             score: relevance.score,
             confidence: relevance.confidence,
-            modelResponse: relevance
+            modelResponse: relevance,
+            createdAt: new Date().toISOString()
           });
 
           const explorationScore = calculateExplorationScore({
             category: paper.primaryCategory,
             categoryStats,
-            votingHistory: userVotes.length
+            votingHistory: Object.keys(userVotes).length
           });
 
           const categoryScore = calculateCategoryScore(paper.primaryCategory, categoryStats);
@@ -110,11 +113,11 @@ export async function getRecommendations(userId: number, preferences: string): P
             explorationScore,
             categoryScore,
             confidence: relevance.confidence,
-            votingHistory: userVotes.length
+            votingHistory: Object.keys(userVotes).length
           });
 
           recommendations.push({
-            paperId: paper.id,
+            paperId: paper.arxivId,
             score: relevance.score,
             confidence: relevance.confidence,
             needsFeedback: true,
@@ -124,7 +127,7 @@ export async function getRecommendations(userId: number, preferences: string): P
           });
         }
       } catch (error) {
-        console.error(`Error analyzing paper ${paper.id}:`, error);
+        console.error(`Error analyzing paper ${paper.arxivId}:`, error);
       }
     }
 
@@ -135,18 +138,21 @@ export async function getRecommendations(userId: number, preferences: string): P
   }
 }
 
-async function calculateCategoryStatistics(userId: number): Promise<CategoryStatistics> {
+async function calculateCategoryStatistics(userId: string): Promise<CategoryStatistics> {
   try {
-    const votes = await db.query.paperVotes.findMany({
-      where: eq(paperVotes.userId, userId),
-      with: {
-        paper: true
-      }
-    });
+    const db = getDatabase();
+    const votesRef = db.ref(`votes/${userId}`);
+    const votesSnapshot = await votesRef.get();
+    const userVotes = votesSnapshot.val() || {};
+
+    const papersRef = db.ref('papers');
+    const papersSnapshot = await papersRef.get();
+    const papers = papersSnapshot.val() || {};
 
     const stats: CategoryStatistics = {};
 
-    votes.forEach(({ vote, paper }) => {
+    Object.entries(userVotes).forEach(([paperId, vote]: [string, any]) => {
+      const paper = papers[paperId];
       if (!paper) return;
 
       if (!stats[paper.primaryCategory]) {
@@ -158,7 +164,7 @@ async function calculateCategoryStatistics(userId: number): Promise<CategoryStat
       }
 
       stats[paper.primaryCategory].totalVotes++;
-      if (vote === 1) {
+      if (vote.vote === 1) {
         stats[paper.primaryCategory].positiveVotes++;
       }
     });
@@ -237,67 +243,46 @@ function combineScores({
   );
 }
 
-function adjustConfidence(
-  baseConfidence: number,
-  factors: {
-    ageInDays: number;
-    feedbackConsistency: number;
-    votingHistory: number;
-  }
-): number {
-  const timeDecay = Math.exp(-0.1 * factors.ageInDays);
-  const consistencyBoost = factors.feedbackConsistency * 0.2;
-  const experienceBoost = Math.min(0.3, factors.votingHistory / 100);
-
-  return Math.min(100, Math.max(0,
-    baseConfidence * timeDecay +
-    consistencyBoost * 100 +
-    experienceBoost * 100
-  ));
-}
-
-async function calculateFeedbackConsistency(userId: number, category: string): Promise<number> {
+async function calculateFeedbackConsistency(userId: string, category: string): Promise<number> {
   try {
-    const relatedPapers = await db.query.papers.findMany({
-      where: eq(papers.primaryCategory, category)
-    });
+    const db = getDatabase();
+    const papersRef = db.ref('papers');
+    const papersSnapshot = await papersRef.get();
+    const papers = papersSnapshot.val() || {};
 
-    const paperIds = relatedPapers.map(p => p.id);
+    const votesRef = db.ref(`votes/${userId}`);
+    const votesSnapshot = await votesRef.get();
+    const votes = votesSnapshot.val() || {};
 
-    const votes = await db.query.paperVotes.findMany({
-      where: and(
-        eq(paperVotes.userId, userId),
-        inArray(paperVotes.paperId, paperIds)
-      )
-    });
+    const categoryVotes = Object.entries(votes)
+      .filter(([paperId]) => papers[paperId]?.primaryCategory === category)
+      .map(([_, vote]: [string, any]) => vote);
 
-    if (votes.length < 2) return 0.5;
+    if (categoryVotes.length < 2) return 0.5;
 
-    const upvotes = votes.filter(v => v.vote === 1).length;
-    const downvotes = votes.filter(v => v.vote === -1).length;
+    const upvotes = categoryVotes.filter(v => v.vote === 1).length;
+    const downvotes = categoryVotes.filter(v => v.vote === -1).length;
 
-    return Math.abs(upvotes - downvotes) / votes.length;
+    return Math.abs(upvotes - downvotes) / categoryVotes.length;
   } catch (error) {
     console.error("Error calculating feedback consistency:", error);
     return 0.5;
   }
 }
 
-export async function updateRecommendations(userId: number, paperId: number, vote: number) {
+export async function updateRecommendations(userId: string, paperId: string, vote: number) {
   try {
-    const [currentScore] = await db.select()
-      .from(paperRelevanceScores)
-      .where(and(
-        eq(paperRelevanceScores.userId, userId),
-        eq(paperRelevanceScores.paperId, paperId)
-      ));
+    const db = getDatabase();
+    const scoreRef = db.ref(`paperRelevanceScores/${userId}/${paperId}`);
+    const scoreSnapshot = await scoreRef.get();
+    const currentScore = scoreSnapshot.val();
 
     if (!currentScore) return;
 
     const categoryStats = await calculateCategoryStatistics(userId);
-    const paper = await db.query.papers.findFirst({
-      where: eq(papers.id, paperId)
-    });
+    const paperRef = db.ref(`papers/${paperId}`);
+    const paperSnapshot = await paperRef.get();
+    const paper = paperSnapshot.val();
 
     if (!paper) return;
 
@@ -309,18 +294,17 @@ export async function updateRecommendations(userId: number, paperId: number, vot
     const confidenceBoost = Math.min(20, categoryConfidence * 2);
     const newConfidence = Math.min(100, currentScore.confidence + confidenceBoost);
 
-    await db.update(paperRelevanceScores)
-      .set({
+    await db.ref(`paperRelevanceScores/${userId}/${paperId}`).set({
+      score: newScore,
+      confidence: newConfidence,
+      modelResponse: {
+        ...currentScore.modelResponse,
         score: newScore,
         confidence: newConfidence,
-        modelResponse: {
-          ...currentScore.modelResponse,
-          score: newScore,
-          confidence: newConfidence,
-          explanation: `Score adjusted based on user feedback`
-        }
-      })
-      .where(eq(paperRelevanceScores.id, currentScore.id));
+        explanation: `Score adjusted based on user feedback`
+      },
+      updatedAt: new Date().toISOString()
+    });
   } catch (error) {
     console.error("Error updating recommendations:", error);
   }

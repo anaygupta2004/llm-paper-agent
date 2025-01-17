@@ -1,5 +1,6 @@
 import { initializeApp, cert, type App } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
+import { getDatabase } from "firebase-admin/database";
 import { type DecodedIdToken } from "firebase-admin/auth";
 
 // Initialize Firebase Admin
@@ -10,9 +11,11 @@ const app: App = initializeApp({
     // Handle both formats of private key storage
     privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
   }),
+  databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`,
 });
 
 export const auth: Auth = getAuth(app);
+export const db = getDatabase(app);
 
 // Define types for the extended Express Request
 declare global {
@@ -23,6 +26,33 @@ declare global {
   }
 }
 
+// Data models
+export interface Paper {
+  id: string;
+  title: string;
+  authors: string[];
+  abstract: string;
+  pdfUrl: string;
+  primaryCategory: string;
+  publishedDate: string;
+  relevanceScore?: number;
+  explanation?: string;
+}
+
+export interface Vote {
+  userId: string;
+  paperId: string;
+  vote: number;
+  timestamp: string;
+}
+
+export interface UserPreferences {
+  openaiApiKey?: string;
+  categories?: string[];
+  preferences?: string;
+}
+
+// Firebase Admin helper functions
 export async function verifyAuthToken(token: string): Promise<DecodedIdToken> {
   try {
     const decodedToken = await auth.verifyIdToken(token);
@@ -38,6 +68,61 @@ export async function verifyAuthToken(token: string): Promise<DecodedIdToken> {
       code: error.code,
       timestamp: new Date().toISOString()
     });
+    throw error;
+  }
+}
+
+export async function savePaper(paper: Paper) {
+  try {
+    const ref = db.ref(`papers/${paper.id}`);
+    await ref.set(paper);
+    return paper;
+  } catch (error) {
+    console.error("[Firebase] Save paper error:", error);
+    throw error;
+  }
+}
+
+export async function getPapers(limit: number = 10, offset: number = 0) {
+  try {
+    const ref = db.ref('papers');
+    const snapshot = await ref.orderByChild('publishedDate').limitToLast(limit).get();
+    return snapshot.exists() ? Object.values(snapshot.val()) : [];
+  } catch (error) {
+    console.error("[Firebase] Get papers error:", error);
+    throw error;
+  }
+}
+
+export async function saveVote(vote: Vote) {
+  try {
+    const ref = db.ref(`votes/${vote.userId}/${vote.paperId}`);
+    await ref.set(vote);
+    return vote;
+  } catch (error) {
+    console.error("[Firebase] Save vote error:", error);
+    throw error;
+  }
+}
+
+export async function getUserPreferences(userId: string): Promise<UserPreferences> {
+  try {
+    const ref = db.ref(`users/${userId}/preferences`);
+    const snapshot = await ref.get();
+    return snapshot.exists() ? snapshot.val() : {};
+  } catch (error) {
+    console.error("[Firebase] Get user preferences error:", error);
+    throw error;
+  }
+}
+
+export async function updateUserPreferences(userId: string, preferences: UserPreferences) {
+  try {
+    const ref = db.ref(`users/${userId}/preferences`);
+    await ref.update(preferences);
+    return preferences;
+  } catch (error) {
+    console.error("[Firebase] Update user preferences error:", error);
     throw error;
   }
 }

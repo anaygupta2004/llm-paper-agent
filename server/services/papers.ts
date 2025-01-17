@@ -1,16 +1,14 @@
 import axios from "axios";
 import { parseStringPromise } from "xml2js";
-import { papers, paperVotes, paperRelevanceScores } from "@db/schema";
-import { db } from "@db";
+import { getDatabase, type Database } from "firebase-admin/database";
 import { analyzePaperRelevance, generateSearchQuery } from "./openai";
-import { eq, and, desc, sql } from "drizzle-orm";
 
 interface FetchPapersOptions {
   categories: string[];
   maxResults: number;
   dateRange: number;
   preferences?: string;
-  userId?: number;
+  userId?: string;
 }
 
 export async function fetchAndStorePapers(options: FetchPapersOptions) {
@@ -60,6 +58,7 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
     console.log("\n========== PROCESSING PAPERS ==========");
     console.log(`Found ${entries.length} papers to process`);
 
+    const db = getDatabase();
     const results = [];
     const batchSize = 5; // Process papers in batches to improve performance
 
@@ -84,7 +83,7 @@ export async function fetchAndStorePapers(options: FetchPapersOptions) {
             primaryCategory: entry.primary_category ? 
               entry.primary_category.term : 
               (Array.isArray(entry.category) ? entry.category[0].term : entry.category.term),
-            publishedDate: new Date(entry.published),
+            publishedDate: new Date(entry.published).toISOString(),
           };
 
           // If preferences are provided, analyze paper relevance before storing
@@ -104,24 +103,22 @@ Abstract: ${paper.abstract.substring(0, 200)}...
             // Higher threshold (70%) for more relevant results
             if (relevance.score >= 70) {
               // Check if paper already exists
-              const existing = await db.select()
-                .from(papers)
-                .where(eq(papers.arxivId, paper.arxivId))
-                .limit(1);
+              const paperRef = db.ref(`papers/${paper.arxivId}`);
+              const snapshot = await paperRef.get();
 
-              if (!existing.length) {
-                const [storedPaper] = await db.insert(papers)
-                  .values(paper)
-                  .returning();
+              if (!snapshot.exists()) {
+                // Store paper in Firebase
+                await paperRef.set(paper);
 
                 // Store relevance scores for better recommendations
-                await db.insert(paperRelevanceScores).values({
-                  paperId: storedPaper.id,
-                  userId: userId, // Added userId here
-                  score: relevance.score,
-                  confidence: relevance.confidence,
-                  modelResponse: relevance
-                });
+                if (userId) {
+                  await db.ref(`paperRelevanceScores/${userId}/${paper.arxivId}`).set({
+                    score: relevance.score,
+                    confidence: relevance.confidence,
+                    modelResponse: relevance,
+                    createdAt: new Date().toISOString()
+                  });
+                }
 
                 return { ...paper, relevance };
               }
@@ -130,13 +127,11 @@ Abstract: ${paper.abstract.substring(0, 200)}...
             }
           } else {
             // Without preferences, store all papers
-            const existing = await db.select()
-              .from(papers)
-              .where(eq(papers.arxivId, paper.arxivId))
-              .limit(1);
+            const paperRef = db.ref(`papers/${paper.arxivId}`);
+            const snapshot = await paperRef.get();
 
-            if (!existing.length) {
-              await db.insert(papers).values(paper);
+            if (!snapshot.exists()) {
+              await paperRef.set(paper);
               return paper;
             }
           }
@@ -181,50 +176,49 @@ Abstract: ${paper.abstract.substring(0, 150)}...
   }
 }
 
-export async function getPaperRelevance(paperId: number, preferences: string, userId?: number) {
-  const [paper] = await db.select()
-    .from(papers)
-    .where(eq(papers.id, paperId))
-    .limit(1);
+export async function getPaperRelevance(paperId: string, preferences: string, userId?: string) {
+  const db = getDatabase();
+  const paperRef = db.ref(`papers/${paperId}`);
+  const snapshot = await paperRef.get();
 
-  if (!paper) {
+  if (!snapshot.exists()) {
     throw new Error("Paper not found");
   }
 
+  const paper = snapshot.val();
   const relevance = await analyzePaperRelevance(paper.abstract, preferences, userId);
   return relevance;
 }
 
-export async function updateRelevanceScores(userId: number, preferences: string) {
+export async function updateRelevanceScores(userId: string, preferences: string) {
+  const db = getDatabase();
+
   // Get all papers for this user
-  const userPapers = await db.select()
-    .from(papers)
-    .innerJoin(paperVotes, eq(papers.id, paperVotes.paperId))
-    .where(eq(paperVotes.userId, userId));
+  const votesRef = db.ref(`votes/${userId}`);
+  const votesSnapshot = await votesRef.get();
+  const votes = votesSnapshot.val() || {};
+
+  // Get papers
+  const papersRef = db.ref('papers');
+  const papersSnapshot = await papersRef.get();
+  const papers = papersSnapshot.val() || {};
 
   // Update relevance scores based on preferences and voting history
-  for (const paper of userPapers) {
+  for (const paperId of Object.keys(votes)) {
     try {
+      const paper = papers[paperId];
+      if (!paper) continue;
+
       const relevance = await analyzePaperRelevance(paper.abstract, preferences, userId);
 
-      await db.insert(paperRelevanceScores)
-        .values({
-          paperId: paper.id,
-          userId,
-          score: relevance.score,
-          confidence: relevance.confidence,
-          modelResponse: relevance
-        })
-        .onConflictDoUpdate({
-          target: [paperRelevanceScores.paperId, paperRelevanceScores.userId],
-          set: {
-            score: relevance.score,
-            confidence: relevance.confidence,
-            modelResponse: relevance
-          }
-        });
+      await db.ref(`paperRelevanceScores/${userId}/${paperId}`).set({
+        score: relevance.score,
+        confidence: relevance.confidence,
+        modelResponse: relevance,
+        updatedAt: new Date().toISOString()
+      });
     } catch (error) {
-      console.error(`Error updating relevance score for paper ${paper.id}:`, error);
+      console.error(`Error updating relevance score for paper ${paperId}:`, error);
     }
   }
 }
