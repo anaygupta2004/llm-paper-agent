@@ -1,5 +1,4 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { db } from '../db';
 import { corsMiddleware } from '../middleware/cors';
 import { verifyAuthToken } from '../services/firebase';
 
