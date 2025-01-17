@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { verifyAuthToken, savePaper, getPapers, saveVote, getUserPreferences, updateUserPreferences, type UserPreferences } from "./services/firebase";
+import { getDatabase } from "firebase-admin/database";
+import { verifyAuthToken } from "./services/firebase";
 import { analyzePaperRelevance } from "./services/openai";
 import { fetchAndStorePapers } from "./services/papers";
 
@@ -8,7 +9,14 @@ export function registerRoutes(app: Express): Server {
   // Settings endpoints
   app.get("/api/settings", requireAuth, async (req: Request, res: Response) => {
     try {
-      const userPreferences = await getUserPreferences(req.user!.uid);
+      const db = getDatabase();
+      const userRef = db.ref(`users/${req.user!.uid}/preferences`);
+      const snapshot = await userRef.get();
+      const userPreferences = snapshot.val() || {
+        preferences: "",
+        categories: ["cs.LG", "cs.AI", "cs.CL"],
+        openaiApiKey: null,
+      };
 
       // Send back user preferences, masking the API key
       res.json({
@@ -25,9 +33,11 @@ export function registerRoutes(app: Express): Server {
   app.post("/api/settings", requireAuth, async (req: Request, res: Response) => {
     try {
       const { preferences, categories, openaiApiKey } = req.body;
+      const db = getDatabase();
+      const userRef = db.ref(`users/${req.user!.uid}/preferences`);
 
       // Update user preferences in Firebase
-      await updateUserPreferences(req.user!.uid, {
+      await userRef.set({
         preferences: preferences || "",
         categories: categories || ["cs.LG", "cs.AI", "cs.CL"],
         openaiApiKey: openaiApiKey || null,
@@ -47,7 +57,10 @@ export function registerRoutes(app: Express): Server {
     const offset = (Number(page) - 1) * limit;
 
     try {
-      const userPreferences = await getUserPreferences(req.user!.uid);
+      const db = getDatabase();
+      const userRef = db.ref(`users/${req.user!.uid}/preferences`);
+      const snapshot = await userRef.get();
+      const userPreferences = snapshot.val() || {};
 
       // Only require API key for relevance mode or when searching
       if ((mode === "relevance" || preferences) && !userPreferences?.openaiApiKey) {
@@ -68,12 +81,14 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Get all papers
-      const allPapers = await getPapers();
+      const papersRef = db.ref('papers');
+      const papersSnapshot = await papersRef.get();
+      const allPapers = papersSnapshot.val() ? Object.values(papersSnapshot.val()) : [];
 
       // If searching or in relevance mode, analyze papers
       if (preferences || mode === "relevance") {
         const scoredPapers = await Promise.all(
-          allPapers.map(async (paper) => {
+          allPapers.map(async (paper: any) => {
             try {
               const relevance = await analyzePaperRelevance(
                 paper.abstract,
@@ -125,7 +140,9 @@ export function registerRoutes(app: Express): Server {
     const { paperId, vote } = req.body;
 
     try {
-      await saveVote({
+      const db = getDatabase();
+      const voteRef = db.ref(`votes/${req.user!.uid}/${paperId}`);
+      await voteRef.set({
         userId: req.user!.uid,
         paperId,
         vote: vote === 1 ? 1 : -1,

@@ -72,64 +72,7 @@ export async function verifyAuthToken(token: string): Promise<DecodedIdToken> {
   }
 }
 
-export async function savePaper(paper: Paper) {
-  try {
-    const ref = db.ref(`papers/${paper.id}`);
-    await ref.set(paper);
-    return paper;
-  } catch (error) {
-    console.error("[Firebase] Save paper error:", error);
-    throw error;
-  }
-}
-
-export async function getPapers(limit: number = 10, offset: number = 0) {
-  try {
-    const ref = db.ref('papers');
-    const snapshot = await ref.orderByChild('publishedDate').limitToLast(limit).get();
-    return snapshot.exists() ? Object.values(snapshot.val()) : [];
-  } catch (error) {
-    console.error("[Firebase] Get papers error:", error);
-    throw error;
-  }
-}
-
-export async function saveVote(vote: Vote) {
-  try {
-    const ref = db.ref(`votes/${vote.userId}/${vote.paperId}`);
-    await ref.set(vote);
-    return vote;
-  } catch (error) {
-    console.error("[Firebase] Save vote error:", error);
-    throw error;
-  }
-}
-
-export async function getUserPreferences(userId: string): Promise<UserPreferences> {
-  try {
-    const ref = db.ref(`users/${userId}/preferences`);
-    const snapshot = await ref.get();
-    return snapshot.exists() ? snapshot.val() : {};
-  } catch (error) {
-    console.error("[Firebase] Get user preferences error:", error);
-    throw error;
-  }
-}
-
-export async function updateUserPreferences(userId: string, preferences: UserPreferences) {
-  try {
-    const ref = db.ref(`users/${userId}/preferences`);
-    await ref.update(preferences);
-    return preferences;
-  } catch (error) {
-    console.error("[Firebase] Update user preferences error:", error);
-    throw error;
-  }
-}
-
-/**
- * Utility function to extract and validate Firebase token from request
- */
+// Utility function to extract and validate Firebase token from request
 export async function extractAndVerifyToken(authHeader?: string): Promise<DecodedIdToken> {
   if (!authHeader?.startsWith('Bearer ')) {
     throw new Error('No authentication token provided');

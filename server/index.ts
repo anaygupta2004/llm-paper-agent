@@ -3,7 +3,6 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { corsMiddleware } from "./middleware/cors";
 import { setupStaticServing } from "./middleware/static";
-import path from "path";
 
 // Initialize express app
 const app = express();
@@ -73,7 +72,7 @@ app.get('/health', (_req, res) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({
+    res.status(status).json({ 
       error: message,
       path: req.path,
       timestamp: new Date().toISOString()
