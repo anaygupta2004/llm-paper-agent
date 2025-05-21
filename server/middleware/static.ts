@@ -1,17 +1,20 @@
 import express from 'express';
 import path from 'path';
 import { log } from '../vite';
+import { readdir, existsSync } from 'fs';
+import { promisify } from 'util';
+
+const readdirAsync = promisify(readdir);
 
 export function setupStaticServing(app: express.Express) {
   const distPath = path.resolve(process.cwd(), "dist", "public");
 
   // Log static file configuration
   try {
-    const fs = require('fs');
     console.debug('[Static] Configuration:', {
       distPath,
-      exists: fs.existsSync(distPath),
-      files: fs.existsSync(distPath) ? fs.readdirSync(distPath) : []
+      exists: existsSync(distPath),
+      files: existsSync(distPath) ? readdirAsync(distPath) : []
     });
   } catch (error) {
     console.error('[Static] Error checking dist directory:', error);

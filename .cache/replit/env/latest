@@ -1,0 +1,57 @@
+declare -gx REPL_SLUG=workspace
+declare -gx REPL_HOME=/home/runner/workspace
+declare -gx GIT_EDITOR=replit-git-editor
+declare -gx REPLIT_ENVIRONMENT=production
+declare -gx REPL_OWNER=AnayGupta
+declare -gx REPLIT_DB_URL=https://kv.replit.com/v0/eyJhbGciOiJIUzUxMiIsImlzcyI6ImNvbm1hbiIsImtpZCI6InByb2Q6MSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJjb25tYW4iLCJleHAiOjE3MzcyNjcxNDQsImlhdCI6MTczNzE1NTU0NCwiZGF0YWJhc2VfaWQiOiJjN2M4MzA1MC0yMjJhLTQwMmMtOWQ4My1iYjY5MWQ5OGIzZTUifQ.h7FjjGdFsOy4QlQqYcNrbutORtTrVyAy24gYUDJLF-k4mtnkVBoOiH084bs2E-76CdUSdO8D8s-RGZKWXI8r3Q
+declare -gx DIRENV_CONFIG=/etc/direnv
+declare -gx REPLIT_BASHRC=/nix/store/x5cq4yhjskwqb9d2yqnvcz99yjai9vxm-replit-bashrc/bashrc
+declare -gx REPLIT_PID1_VERSION=0.0.0-4b8b4dd
+declare -gx REPLIT_RTLD_LOADER=1
+declare -gx NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+declare -gx USER=runner
+declare -gx REPL_PUBKEYS='{"crosis-ci":"7YlpcYh82oR9NSTtSYtR5jDL4onNzCGJGq6b+9CuZII=","crosis-ci:1":"7YlpcYh82oR9NSTtSYtR5jDL4onNzCGJGq6b+9CuZII=","crosis-ci:latest":"7YlpcYh82oR9NSTtSYtR5jDL4onNzCGJGq6b+9CuZII=","prod":"tGsjlu/BJvWTgvMaX7acuUb7AO1dXOrRiuk7y083RFE=","prod:1":"tGsjlu/BJvWTgvMaX7acuUb7AO1dXOrRiuk7y083RFE=","prod:2":"8uGN+vfszlnV93/HCSHlVLG0xddMlPkir1Ni4JKT4+w=","prod:3":"9+MCOSHQSQlcodXoot8dC8NLhc862nLkx1/VMsbY2h8=","prod:4":"8uGN+vfszlnV93/HCSHlVLG0xddMlPkir1Ni4JKT4+w=","prod:5":"9+MCOSHQSQlcodXoot8dC8NLhc862nLkx1/VMsbY2h8=","prod:latest":"tGsjlu/BJvWTgvMaX7acuUb7AO1dXOrRiuk7y083RFE=","vault-goval-token":"D5jJoMx1Ml54HM92NLgXl+MzptwDqbSsfyFG6f52g9E=","vault-goval-token:1":"D5jJoMx1Ml54HM92NLgXl+MzptwDqbSsfyFG6f52g9E=","vault-goval-token:latest":"D5jJoMx1Ml54HM92NLgXl+MzptwDqbSsfyFG6f52g9E="}'
+declare -gx REPL_LANGUAGE=nix
+read -r _new_path <<< "/nix/store/r2wrscmjzn4f2f7wk7q2ms2h96mjwzv7-npx/bin:/home/runner/workspace/.config/npm/node_global/bin:/home/runner/workspace/node_modules/.bin:/nix/store/rrz8cqhldyl17bbs60g7d8vbaadkxc40-nodejs-20.18.1-wrapped/bin:/nix/store/2l0rhsa5pjdg5j0id60f0w5lw6r9g4rp-bun-1.1.40/bin:/nix/store/z8s3r4vwf4r26g2d7shnw5lva6ihim8f-pnpm-9.15.0/bin:/nix/store/jcgdksj946l5l42c2y9ks2l4g6n74h3f-yarn-1.22.22/bin:/nix/store/2s17mrby0ph00z22rkabfs9vzpzx1r70-prettier-3.3.3/bin:/nix/store/0z5iwcvalafm3j2c5pfhllsfbxrbyzf4-postgresql-16.5/bin:/nix/store/43fcc1riad67asxi3s9n48a20lbdygfh-pid1/bin:/nix/store/qz7kx5d9a98g9qd065d2qxr14fbpfq2i-replit-runtime-path/bin:/home/runner/.nix-profile/bin:/home/runner/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+#PATH=/nix/store/r2wrscmjzn4f2f7wk7q2ms2h96mjwzv7-npx/bin:/home/runner/workspace/.config/npm/node_global/bin:/home/runner/workspace/node_modules/.bin:/nix/store/rrz8cqhldyl17bbs60g7d8vbaadkxc40-nodejs-20.18.1-wrapped/bin:/nix/store/2l0rhsa5pjdg5j0id60f0w5lw6r9g4rp-bun-1.1.40/bin:/nix/store/z8s3r4vwf4r26g2d7shnw5lva6ihim8f-pnpm-9.15.0/bin:/nix/store/jcgdksj946l5l42c2y9ks2l4g6n74h3f-yarn-1.22.22/bin:/nix/store/2s17mrby0ph00z22rkabfs9vzpzx1r70-prettier-3.3.3/bin:/nix/store/0z5iwcvalafm3j2c5pfhllsfbxrbyzf4-postgresql-16.5/bin:/nix/store/43fcc1riad67asxi3s9n48a20lbdygfh-pid1/bin:/nix/store/qz7kx5d9a98g9qd065d2qxr14fbpfq2i-replit-runtime-path/bin:/home/runner/.nix-profile/bin:/home/runner/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+if [ -e "/run/replit/env/last" ]; then read -r _last_path < <(\grep '^#PATH=' /run/replit/env/last | cut -f 2 -d =); fi
+_user_components="$(\tr : $'\n' <<< "${PATH:-}" |\grep -xv -f <(\tr : $'\n' <<< "${_last_path}") |\tr $'\n' :)"
+declare -gx PATH="${_user_components}${_new_path}"
+declare -gx HOSTNAME=6406bacabdba
+declare -gx REPLIT_CLUSTER=riker
+declare -gx REPLIT_PID1_FLAG_NIXMODULES_BEFORE_REPLIT_NIX=1
+declare -gx NIX_PATH=nixpkgs=/home/runner/.nix-defexpr/channels/nixpkgs-stable-24_05:/home/runner/.nix-defexpr/channels
+declare -gx HOME=/home/runner
+declare -gx LANG=en_US.UTF-8
+declare -gx REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+declare -gx REPL_IDENTITY=v2.public.Q2lSak4yTTRNekExTUMweU1qSmhMVFF3TW1NdE9XUTRNeTFpWWpZNU1XUTVPR0l6WlRVU0NVRnVZWGxIZFhCMFlSb05VbVZ6WldGeVkyaFNiM1psY2lJa1l6ZGpPRE13TlRBdE1qSXlZUzAwTURKakxUbGtPRE10WW1JMk9URmtPVGhpTTJVMU9JeUhYbG9OQ2dWeWFXdGxjaElFY0dGcFpBPT1pIpNTIZq5ZIThvrgq6A6tjqef5sBlFHL__x9xRdaJ70zVgNXY5QJvKyJwg4LhziiQmCaKjQGTxmWUxZkk0OkJ.R0FFaUJtTnZibTFoYmhLQkNIWXlMbkIxWW14cFl5NVJNbVI2VTFoc2FscFlTakpSVm14U1RqSktlVkpyZEZOVFZYaEVVMjFyTkdONlpETlNNRlpLWWxNNU5GVXlkR2hSVjJodVVtdGtjRmRWZEV0U01EQjZWMWh3Ym1Wck1VVldXR1JOVmtWc05WUlhNVVprUlRWRlVWaHNXbVZVUVRGWGExSnVaV3Q0V0ZOdGJFOWhiWFEwVjJ0U2NrNUdiSEZVYlhoUFZXMDVUVkpYWkhOUmJVcDBVbXBXVTAweFdqTmFSV1JHV1ZWS1JXRlZNVzlOVkZKb1VXNXNTbEp0VG5SaVNFcGhWMFZzYUZGdGJIWlNWMDVJVW01Q1lWRXdhM2haV0hCS1pGZE9TVlp0YkdsU01uaHhWRWMxWVZaWFNYcGFSRTVPVWpOU2VWWXhVbGRVTVZaR1UydG9hMUo2Vm5kVVZFSTBZVEpXVmxWcVJrOWhhMFYzVmpCak1XRnNSbGRhUjBaUFlsaFNZVnBITVZaTmJWSklZMFZzVDFJd01EbDNPRlpNY0ZobU1HNUlPV3RaY1ZWM2JVVnZlR2hTWkRseFdFVkJNbmR6Y1VaQlZGaExjMlEwWDBRdExWaE5XRVZ5VW1oRFJFeHhSMlZJTmtsSk9WcEJlSG96V1ZSRE9WOHhablJtYlc5VGRtcGtja3hFUVM1U01FWkdZVlZLZEZSdVdtbGlWRVp2V1cxb1RWbHJSblZYV0d4TlltdEplRmRYTVRSalJtdzFUbFpLVG1KV1NUSldWRVpyVFVkV2RGTnNXbFJpYmtKWFZtMHhORlV4VW5KVmJVWk9WbTVDVjFVeWRFOVdSbHBaWVVWV1ZtVnJTbkpWYWtFeFUxWkdjbE5zV2s1U2JIQlRWbTF3VDFsWFVsZGlNMmhUWWxkb1UxWnFTbTlrVmxaWVpFZDBhV0pGTlZoWmExWlBWbTFLVldKRlZsWmhhMHBJV2tkNGMxWnNTblZTYkVwWFZsaENTbFl5Y0VOak1XUnpVbXhvYUZOR2NGTlVWV1JUVVRGYVIxcEZaRkppVlZwSlYydFZlRlV3TVhSVmEzUlhUVlphVkZWVVNrcGtNVkp5WVVaS1YyRXhjSFpXVmxwcllqSktjMVJ1U21sVFJWcFlXVzEwZDFReGJGZFZiR1JPVFZoQ1NGZHJWakJoYXpGeVYyeHNWMUp0YUZoV1JFWmhaRWRXU1dOR1pGZGlWa3BKVmtaU1MxUXlUWGxUYWxwV1lYcHNXRlJYZUV0aU1WbDVUVlJTVkUxcldrZFVWbFpyVmtkS1JsZHNXbHBXZWtVd1YxWmFjMDVzUmxWU2JYQnBVbGhDTmxaRVJsZFpWMFY1VTJ4c1ZsWkZXbGRaYTFwaFkyeHdTR1ZGV214U2JrSkdWakl4ZDJGSFJYaGpSemxYWVd0YVZGVjZSazVsUmxwelUyeEdWMUpGU2pOV01uUmhWMjFPZEdORk1WQlhSVFI2V2tWV1drNVdjRVZTV0ZKcFlsUldVVlF3WkdGVmJVcFlZVVJLVkZKV2NIaFdhMVp5WkVkU1JXRkZjR2xpVm5CUlYwUkplRlpWTVhSWmVsSnFWMGhDUmxWclpGWk9SbHBGWWtaU2FFMVdTalpYYlhodllsZFdjbUo2UWxoV1ZURTJWMjF6ZDJWc1pGWk9XRXBVVmtkU1dWZFhhM2RPVmtweVZXMDVUMkZVUmt4VWFrazFVa1Y0YzFOWVpGTmhNWEJ2Vm14V2QwMUdXa2hPVjBab1ZqQndWbFZ0TURWWGJVcFlWV3BLVm1GcmNGQlZNVnBQWkZaa2RGSnNUbE5sYldjdw
+declare -gx REPLIT_LD_AUDIT=/nix/store/n5x1kgbz8zjh63ymsijbislyi1n1hir6-replit_rtld_loader-1/rtld_loader.so
+declare -gx DENO_TLS_CA_STORE=system
+declare -gx NIX_PROFILES='/nix/var/nix/profiles/default /home/runner/.nix-profile'
+declare -gx XDG_CACHE_HOME=/home/runner/workspace/.cache
+declare -gx REPLIT_CLI=/nix/store/9r2kazl4885sn70ihg3gzkpkba9q17ap-pid1-0.0.1/bin/replit
+declare -gx NIX_PS1='\[\033[01;34m\]\w\[\033[00m\]\$ '
+declare -gx npm_config_prefix=/home/runner/workspace/.config/npm/node_global
+declare -gx REPLIT_RIPPKGS_INDICES=/nix/store/qxzwn04kqrxx453zqkq17i6l6ynzlrn9-rippkgs-indices
+declare -gx REPLIT_PID1_FLAG_REPLIT_RTLD_LOADER=1
+declare -gx __EGL_VENDOR_LIBRARY_FILENAMES=/nix/store/141m63y55hh07jcry2lk5w2x5x5bg0b0-mesa-24.2.6-drivers/share/glvnd/egl_vendor.d/50_mesa.json
+declare -gx REPL_IDENTITY_KEY=k2.secret.Uw9onrXqjHwCzjKcLbyIg2CL6ydwGPNxVoE1054cVl-9OjDDSSRjk08Ea2eLct3IO7rThedwBZnqRi97q2Mfhw
+declare -gx COLORTERM=truecolor
+declare -gx REPL_IMAGE=gcr.io/marine-cycle-160323/nix:bf8590a3e2f0a8b70b7ca175eeed9074dffbfca9
+declare -gx GIT_ASKPASS=replit-git-askpass
+declare -gx XDG_DATA_DIRS=/nix/store/qz7kx5d9a98g9qd065d2qxr14fbpfq2i-replit-runtime-path/share
+declare -gx DISPLAY=:0
+declare -gx SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+declare -gx REPLIT_DOMAINS=c7c83050-222a-402c-9d83-bb691d98b3e5-00-11zfc1kx66o6o.riker.replit.dev
+declare -gx XDG_DATA_HOME=/home/runner/workspace/.local/share
+declare -gx DOCKER_CONFIG=/home/runner/workspace/.config/docker
+declare -gx NIXPKGS_ALLOW_UNFREE=1
+declare -gx LIBGL_DRIVERS_PATH=/nix/store/141m63y55hh07jcry2lk5w2x5x5bg0b0-mesa-24.2.6-drivers/lib/dri
+declare -gx REPL_ID=c7c83050-222a-402c-9d83-bb691d98b3e5
+declare -gx XDG_CONFIG_HOME=/home/runner/workspace/.config
+declare -gx REPLIT_SUBCLUSTER=paid
+declare -gx LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
+declare -gx REPLIT_DEV_DOMAIN=c7c83050-222a-402c-9d83-bb691d98b3e5-00-11zfc1kx66o6o.riker.replit.dev
+declare -gx REPL_OWNER_ID=1541004
+declare -gx PROMPT_DIRTRIM=2
+declare -gx REPLIT_NIX_CHANNEL=stable-24_05

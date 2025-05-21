@@ -11,3 +11,4 @@ yarn-debug.log*
 yarn-error.log*
 npm-debug.log*
 .next
+**/.claude/settings.local.json

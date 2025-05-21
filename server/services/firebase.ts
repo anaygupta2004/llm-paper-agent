@@ -2,16 +2,17 @@ import { initializeApp, cert, type App } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getDatabase } from "firebase-admin/database";
 import { type DecodedIdToken } from "firebase-admin/auth";
+import * as dotenv from "dotenv";   
+dotenv.config();
 
 // Initialize Firebase Admin
 const app: App = initializeApp({
   credential: cert({
     projectId: process.env.FIREBASE_PROJECT_ID,
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    // Handle both formats of private key storage
-    privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    privateKey: process.env.FIREBASE_PRIVATE_KEY,
   }),
-  databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`,
+  databaseURL: "https://arxiv-paper-rec-default-rtdb.firebaseio.com",
 });
 
 export const auth: Auth = getAuth(app);
@@ -80,4 +81,25 @@ export async function extractAndVerifyToken(authHeader?: string): Promise<Decode
 
   const token = authHeader.split('Bearer ')[1];
   return verifyAuthToken(token);
+}
+
+export async function getUserPreferences(userId: string): Promise<UserPreferences | null> {
+  try {
+    const database = getDatabase();
+    const prefsRef = database.ref(`userPreferences/${userId}`);
+    const snapshot = await prefsRef.get();
+    
+    console.log("[Firebase] Getting user preferences:", {
+      userId,
+      exists: snapshot.exists(),
+      hasApiKey: !!snapshot.val()?.openaiApiKey,
+      apiKeyPrefix: snapshot.val()?.openaiApiKey?.substring(0, 7),
+      timestamp: new Date().toISOString()
+    });
+
+    return snapshot.exists() ? snapshot.val() : null;
+  } catch (error) {
+    console.error("[Firebase] Error getting user preferences:", error);
+    return null;
+  }
 }

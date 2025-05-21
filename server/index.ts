@@ -3,6 +3,10 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { corsMiddleware } from "./middleware/cors";
 import { setupStaticServing } from "./middleware/static";
+import * as dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 // Initialize express app
 const app = express();
@@ -87,7 +91,7 @@ app.get('/health', (_req, res) => {
   }
 
   // Start server
-  const PORT = Number(process.env.PORT) || 5000;
+  const PORT = Number(process.env.PORT) || 3000;
   server.listen(PORT, "0.0.0.0", () => {
     log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
     console.debug('[Server] Configuration:', {

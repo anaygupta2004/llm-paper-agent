@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Paper } from "@db/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 export function usePapers(preferences: string | null = null, page: number = 1, mode: 'annotation' | 'relevance' = 'annotation') {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   return useQuery({
     queryKey: ['/api/papers', preferences, page, mode],
@@ -26,11 +29,20 @@ export function usePapers(preferences: string | null = null, page: number = 1, m
       });
 
       if (!response.ok) {
-        if (response.status >= 500) {
-          throw new Error(`${response.status}: ${response.statusText}`);
+        const data = await response.json();
+        
+        // Handle API key requirement
+        if (response.status === 400 && data.requiresApiKey) {
+          toast({
+            title: "API Key Required",
+            description: data.message || "Please set your OpenAI API key in settings to enable paper search.",
+            variant: "destructive"
+          });
+          // Trigger settings modal or navigation
+          queryClient.setQueryData(['showSettingsModal'], true);
         }
-
-        throw new Error(`${response.status}: ${await response.text()}`);
+        
+        throw new Error(data.message || `${response.status}: ${response.statusText}`);
       }
 
       return response.json();

@@ -2,14 +2,21 @@ import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { getDatabase, ref, set, get, query, orderByChild } from "firebase/database";
 
+// Function to sanitize paper IDs for Firebase paths
+// Firebase doesn't allow '.', '#', '$', '[', or ']' in path segments
+export function sanitizeForFirebasePath(id: string): string {
+  return id.replace(/[.#$[\]]/g, '_');
+}
+
 // Initialize Firebase configuration
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.appspot.com`,
-  databaseURL: `https://${import.meta.env.VITE_FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  privateKey: import.meta.env.VITE_FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
 };
 
 // Initialize Firebase
@@ -28,7 +35,8 @@ googleProvider.setCustomParameters({
 // Firebase database helper functions
 export async function savePaper(paperId: string, paperData: any) {
   try {
-    await set(ref(db, `papers/${paperId}`), {
+    const sanitizedId = sanitizeForFirebasePath(paperId);
+    await set(ref(db, `papers/${sanitizedId}`), {
       ...paperData,
       createdAt: new Date().toISOString(),
     });
@@ -40,7 +48,8 @@ export async function savePaper(paperId: string, paperData: any) {
 
 export async function getPaper(paperId: string) {
   try {
-    const paperRef = ref(db, `papers/${paperId}`);
+    const sanitizedId = sanitizeForFirebasePath(paperId);
+    const paperRef = ref(db, `papers/${sanitizedId}`);
     const snapshot = await get(paperRef);
     return snapshot.exists() ? snapshot.val() : null;
   } catch (error) {
@@ -51,7 +60,8 @@ export async function getPaper(paperId: string) {
 
 export async function saveVote(userId: string, paperId: string, vote: number) {
   try {
-    await set(ref(db, `votes/${userId}/${paperId}`), {
+    const sanitizedId = sanitizeForFirebasePath(paperId);
+    await set(ref(db, `votes/${userId}/${sanitizedId}`), {
       vote,
       timestamp: new Date().toISOString(),
     });
@@ -63,8 +73,9 @@ export async function saveVote(userId: string, paperId: string, vote: number) {
 
 export async function getPaperVotes(paperId: string) {
   try {
+    const sanitizedId = sanitizeForFirebasePath(paperId);
     const votesRef = ref(db, 'votes');
-    const votesQuery = query(votesRef, orderByChild(paperId));
+    const votesQuery = query(votesRef, orderByChild(sanitizedId));
     const snapshot = await get(votesQuery);
     return snapshot.exists() ? snapshot.val() : {};
   } catch (error) {
@@ -143,6 +154,7 @@ console.debug("Firebase Config:", {
   hasApiKey: !!import.meta.env.VITE_FIREBASE_API_KEY,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   hasAppId: !!import.meta.env.VITE_FIREBASE_APP_ID,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
   currentDomain,
   authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
   isDevelopment: import.meta.env.DEV,
